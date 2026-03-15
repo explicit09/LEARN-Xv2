@@ -471,3 +471,18 @@ Phase 1C complete with corrections. 8 DB tables + RLS deployed via migrations 00
 - [ ] `pnpm --filter web test:contract` — quiz/flashcard procedures pass + all prior procedures pass
 - [ ] `pnpm typecheck` — all packages clean
 - [ ] `pnpm lint` — zero errors
+
+### Phase 1F Summary
+
+Complete. Quizzes + Flashcards with FSRS spaced-repetition implemented.
+
+- 7 new tables: quizzes, quiz_questions, quiz_attempts, quiz_responses, flashcard_sets, flashcards, flashcard_reviews
+- `get_due_flashcards` RPC function with SECURITY DEFINER
+- Validators: createQuizSchema, submitReviewSchema (rating 1-4), etc. — 130 unit tests passing
+- tRPC routers: quiz (list/get/startAttempt/submitResponse/completeAttempt) + flashcard (listSets/getSet/getDue/submitReview)
+- FSRS via `@learn-x/utils` rateCard() in submitReview
+- Trigger.dev jobs: generate-quiz, generate-flashcards (gpt-4o-mini)
+- UI: QuizRunner, QuizList, FlashcardCard, FlashcardReview, FlashcardSetList
+- Quiz + Flashcard tabs on workspace page
+- 72 contract tests passing, all 8 test files green
+- Schema split: schema-practice.ts (7 tables) to stay under 400-line limit

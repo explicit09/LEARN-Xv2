@@ -11,5 +11,5 @@ to find the next phase to implement. Never reorder completed phases.
 - [x] phase-1C-concept-graph-syllabus
 - [x] phase-1D-lesson-generation
 - [x] phase-1E-grounded-chat
-- [ ] phase-1F-quizzes-flashcards
+- [x] phase-1F-quizzes-flashcards
 - [ ] phase-1G-mastery-dashboard

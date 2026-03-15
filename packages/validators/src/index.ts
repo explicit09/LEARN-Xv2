@@ -29,3 +29,20 @@ export {
   listChatSessionsSchema,
   sendMessageSchema,
 } from './chat'
+export {
+  quizTypeEnum,
+  createQuizSchema,
+  getQuizSchema,
+  startAttemptSchema,
+  submitResponseSchema,
+  completeAttemptSchema,
+  triggerGenerateQuizSchema,
+} from './quiz'
+export {
+  flashcardSourceTypeEnum,
+  createFlashcardSetSchema,
+  getFlashcardSetSchema,
+  getDueFlashcardsSchema,
+  submitReviewSchema,
+  triggerGenerateFlashcardsSchema,
+} from './flashcard'
