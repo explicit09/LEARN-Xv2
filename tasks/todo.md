@@ -375,3 +375,99 @@ Phase 1C complete with corrections. 8 DB tables + RLS deployed via migrations 00
 - 4 tRPC procedures (all use `ctx.supabase` not drizzle — direct PG port not reachable in this env)
 - 5 chat UI components + session detail page
 - **Lesson learned:** All tRPC routers must use `ctx.supabase` (Supabase JS client), not drizzle directly. Direct PostgreSQL port (5432) to `db.[project].supabase.co` is unreachable; only the REST API port works.
+
+---
+
+## Phase 1F — Quizzes + Flashcards
+
+**Branch:** feat/phase-1F-quizzes-flashcards
+
+### Docs read (mandatory before coding)
+
+- [x] `docs/03-database.md` — quizzes, quiz_questions, quiz_attempts, quiz_responses, flashcard_sets, flashcards, flashcard_reviews schema + get_due_flashcards RPC
+- [x] `docs/07-ai-pipeline.md` — MODEL_ROUTES.FAST_GENERATION (gemini-2.0-flash-lite for quizzes/flashcards), ai_requests Rule 6
+- [x] `docs/12-personalization-engine.md` — persona context for quiz difficulty + flashcard domain
+
+### Plan
+
+#### Step 1 — Validator tests (FAILING first) → implement
+
+- [ ] `packages/validators/src/__tests__/quiz.test.ts`:
+  - `createQuizSchema` validates workspaceId uuid, optional lessonId uuid, quizType enum
+  - `submitResponseSchema` validates attemptId uuid, questionId uuid, userAnswer string
+  - rejects invalid enum values
+- [ ] `packages/validators/src/__tests__/flashcard.test.ts`:
+  - `createFlashcardSetSchema` validates workspaceId uuid, title string, sourceType enum
+  - `submitReviewSchema` validates cardId uuid, rating 1-4 integer
+- [ ] `packages/validators/src/quiz.ts` — createQuizSchema, getQuizSchema, startAttemptSchema, submitResponseSchema, completeAttemptSchema, triggerGenerateQuizSchema
+- [ ] `packages/validators/src/flashcard.ts` — createFlashcardSetSchema, getFlashcardSetSchema, getDueFlashcardsSchema, submitReviewSchema, triggerGenerateFlashcardsSchema
+- [ ] `packages/validators/src/index.ts` — export quiz + flashcard schemas
+
+#### Step 2 — Database migration
+
+- [ ] `supabase/migrations/0007_phase1f_practice.sql`:
+  - `quizzes`: id, workspace_id, lesson_id nullable, user_id, title, quiz_type CHECK IN ('practice','review','exam_prep','diagnostic'), difficulty_level, created_at
+  - `quiz_questions`: id, quiz_id, question_type CHECK IN ('mcq','short_answer','fill_blank','true_false'), bloom_level, question_text, options JSONB, correct_answer, explanation, concept_id nullable, order_index, created_at
+  - `quiz_attempts`: id, quiz_id, user_id, score REAL, time_spent_seconds, completed_at, created_at
+  - `quiz_responses`: id, attempt_id, question_id, user_answer, is_correct, ai_feedback, created_at
+  - `flashcard_sets`: id, workspace_id, user_id, title, source_type CHECK IN ('lesson','workspace','manual'), source_id, card_count, created_at
+  - `flashcards`: id, set_id, user_id, front, back, concept_id nullable, fsrs_stability REAL DEFAULT 0, fsrs_difficulty REAL DEFAULT 0, fsrs_elapsed_days INT DEFAULT 0, fsrs_scheduled_days INT DEFAULT 0, fsrs_reps INT DEFAULT 0, fsrs_lapses INT DEFAULT 0, fsrs_state TEXT CHECK IN ('new','learning','review','relearning') DEFAULT 'new', next_review_at TIMESTAMPTZ, last_review_at TIMESTAMPTZ, created_at
+  - `flashcard_reviews`: id, card_id, user_id, rating INT CHECK BETWEEN 1 AND 4, review_duration_ms, created_at
+  - Indexes: idx_flashcards_due (partial, where fsrs_state != 'new'), all FK indexes
+  - RLS on all 7 tables (workspace/user-scoped)
+  - `get_due_flashcards(p_user_id UUID, p_limit INT DEFAULT 20)` RPC function
+- [ ] Apply migration via Supabase MCP
+
+#### Step 3 — Prompt files
+
+- [ ] `apps/web/src/lib/ai/prompts/quiz-generation.v1.ts`:
+  - `buildQuizPrompt(params: { conceptNames: string[], retrievedChunks: string[], lessonTitle?: string, questionCount?: number, bloomLevels?: string[] }): string`
+  - `QUIZ_PROMPT_VERSION = 'quiz-generation.v1'`
+  - Uses Gemini Flash-Lite (FAST_GENERATION)
+- [ ] `apps/web/src/lib/ai/prompts/flashcard-generation.v1.ts`:
+  - `buildFlashcardPrompt(params: { conceptNames: string[], retrievedChunks: string[], count?: number }): string`
+  - `FLASHCARD_PROMPT_VERSION = 'flashcard-generation.v1'`
+
+#### Step 4 — Trigger.dev jobs
+
+- [ ] `trigger/src/jobs/generate-quiz.ts`:
+  - id: 'generate-quiz', payload: `{ workspaceId, lessonId?, userId }`
+  - Fetch concepts for lesson or workspace → hybrid_search chunks per concept → call generateObject (gemini-2.0-flash-lite) → record ai_request → insert quiz + quiz_questions
+- [ ] `trigger/src/jobs/generate-flashcards.ts`:
+  - id: 'generate-flashcards', payload: `{ workspaceId, lessonId?, userId, setId }`
+  - Fetch lesson chunks or workspace chunks → call generateObject (gemini-2.0-flash-lite) → record ai_request → insert flashcards into set, update card_count
+- [ ] Copy prompt files to `trigger/src/lib/prompts/` (same as 1D pattern — no cross-package import)
+
+#### Step 5 — tRPC contract tests (FAILING first) → implement
+
+- [ ] `apps/web/src/server/routers/__tests__/quiz.contract.test.ts`:
+  - `quiz.get` — UNAUTHORIZED; NOT_FOUND; returns quiz with questions
+  - `quiz.startAttempt` — UNAUTHORIZED; creates attempt row; returns attempt with questions
+  - `quiz.submitResponse` — UNAUTHORIZED; records response, returns is_correct
+  - `quiz.completeAttempt` — UNAUTHORIZED; sets score + completed_at
+  - `quiz.triggerGenerate` — UNAUTHORIZED; returns queued status
+- [ ] `apps/web/src/server/routers/__tests__/flashcard.contract.test.ts`:
+  - `flashcard.getDue` — UNAUTHORIZED; returns [] when no due cards; returns due cards
+  - `flashcard.submitReview` — UNAUTHORIZED; updates FSRS state fields; inserts review row
+  - `flashcard.triggerGenerate` — UNAUTHORIZED; returns queued status
+- [ ] `apps/web/src/server/routers/quiz.ts` — all procedures using ctx.supabase
+- [ ] `apps/web/src/server/routers/flashcard.ts` — all procedures using ctx.supabase; submitReview runs ts-fsrs to compute next state
+- [ ] `apps/web/src/server/routers/_app.ts` — merge quizRouter + flashcardRouter
+
+#### Step 6 — UI components
+
+- [ ] `apps/web/src/components/quiz/QuizQuestion.tsx` — single question with MCQ options or text input; immediate feedback after answer
+- [ ] `apps/web/src/components/quiz/QuizRunner.tsx` (client) — trpc.quiz.startAttempt.useMutation, steps through questions, submits responses, shows score at end
+- [ ] `apps/web/src/components/quiz/QuizList.tsx` (client) — list quizzes in workspace + "Generate Quiz" button
+- [ ] `apps/web/src/components/flashcard/FlashcardCard.tsx` — flip animation (front/back), rating buttons (Again/Hard/Good/Easy)
+- [ ] `apps/web/src/components/flashcard/FlashcardReview.tsx` (client) — trpc.flashcard.getDue.useQuery, steps through due cards, submitReview mutation
+- [ ] `apps/web/src/app/(app)/workspace/[id]/quiz/[quizId]/page.tsx` — quiz detail with QuizRunner
+- [ ] `apps/web/src/app/(app)/workspace/[id]/flashcards/page.tsx` — flashcard review with FlashcardReview
+- [ ] Update `apps/web/src/app/(app)/workspace/[id]/page.tsx` — add Quiz + Flashcards tabs
+
+### Verification
+
+- [ ] `pnpm test:unit` — quiz/flashcard validator tests pass + all prior tests pass
+- [ ] `pnpm --filter web test:contract` — quiz/flashcard procedures pass + all prior procedures pass
+- [ ] `pnpm typecheck` — all packages clean
+- [ ] `pnpm lint` — zero errors
