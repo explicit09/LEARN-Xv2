@@ -28,7 +28,7 @@
   },
   "lint-staged": {
     "*.{ts,tsx}": [
-      "eslint --fix",
+      "pnpm lint",
       "prettier --write"
     ],
     "*.{json,md,yaml}": [
