@@ -501,3 +501,146 @@ Complete. Mastery Dashboard implemented.
 - UI: MasteryDashboard with stats grid, "What to study next", struggling concepts with stability progress bars
 - Mastery tab added to workspace page
 - 78 contract tests passing across 9 test files
+
+---
+
+## Phase 2: Retention + Institutional Foundation
+
+**Branch:** feat/phase-2-retention-institutional
+**Goal:** Exam system, audio recaps, daily study plans, remediation paths, instructor tools.
+
+### 2A — Exam System
+
+#### Migration
+
+- [ ] `supabase/migrations/0009_phase2a_exams.sql` — exams, exam_questions, exam_attempts, exam_responses tables + RLS + join_token unique index
+- [ ] Apply via Supabase MCP (project_id: yluryjcvohdjvgdmeatk)
+
+#### Validators (test-first)
+
+- [ ] `packages/validators/src/__tests__/exam.test.ts` — failing tests for all exam schemas
+- [ ] `packages/validators/src/exam.ts` — examStatusEnum, questionTypeEnum, bloomLevelEnum, createExamSchema, startExamSchema, submitResponseSchema, completeExamSchema, joinExamSchema
+- [ ] `packages/validators/src/index.ts` — export exam schemas
+
+#### Trigger.dev job
+
+- [ ] `trigger/src/jobs/generate-exam.ts` — fetch concepts + chunks → gpt-4o-mini generateObject → insert exams + exam_questions → ai_requests row
+  - Bloom's distribution: 30% remember/understand, 40% apply/analyze, 30% evaluate/create
+  - Min 10 questions, 2-3 per concept
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/exam.contract.test.ts` — UNAUTHORIZED, list returns [], generate returns jobId, start returns attempt + questions, complete returns score
+- [ ] `apps/web/src/server/routers/exam.ts` — list, get, generate, start, submitResponse, complete, share, joinByToken
+- [ ] `apps/web/src/server/routers/_app.ts` — add exam: examRouter
+
+#### UI
+
+- [ ] `apps/web/src/app/(app)/workspace/[id]/exam/page.tsx` — exam list + Generate button
+- [ ] `apps/web/src/app/(app)/workspace/[id]/exam/[examId]/page.tsx` — timed exam taking UI (countdown, one question at a time, MCQ/short_answer/true_false/fill_blank, auto-submit on timer)
+- [ ] `apps/web/src/app/(app)/workspace/[id]/exam/[examId]/score/page.tsx` — score screen with letter grade, per-question review, Retake + Back buttons
+- [ ] `apps/web/src/components/exam/ExamTimer.tsx` — countdown timer component
+- [ ] Update workspace page — add Exams tab
+
+### 2B — Audio Recaps
+
+#### Migration
+
+- [ ] `supabase/migrations/0010_phase2b_audio.sql` — audio_recaps table + RLS
+- [ ] Apply via Supabase MCP
+
+#### Trigger.dev job
+
+- [ ] `trigger/src/jobs/generate-audio-recap.ts` — fetch lesson sections → LLM dialogue script → ElevenLabs TTS → Supabase Storage → insert audio_recaps row
+  - If no ELEVENLABS_API_KEY: store placeholder MP3
+  - Voices: Rachel (Host A), Antoni (Host B)
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/audioRecap.contract.test.ts`
+- [ ] `apps/web/src/server/routers/audioRecap.ts` — get, generate, list
+- [ ] `apps/web/src/server/routers/_app.ts` — add audioRecap: audioRecapRouter
+
+#### UI
+
+- [ ] `apps/web/src/components/lesson/AudioRecapPlayer.tsx` — play/pause, scrubber, time, Generate button + Generating skeleton
+- [ ] Add AudioRecapPlayer to LessonReader component
+
+### 2C — Daily Study Plans + Exam Prep
+
+#### Migration
+
+- [ ] `supabase/migrations/0011_phase2c_studyplans.sql` — study_plans table + RLS
+- [ ] Apply via Supabase MCP
+
+#### Trigger.dev job
+
+- [ ] `trigger/src/jobs/generate-study-plan.ts` — mastery summary + due flashcards + incomplete lessons → prioritized plan (max 5 items) → readiness_score → upsert study_plans
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/studyPlan.contract.test.ts`
+- [ ] `apps/web/src/server/routers/studyPlan.ts` — getToday, setExamDate, getReadinessScore, markItemComplete
+- [ ] `apps/web/src/server/routers/_app.ts` — add studyPlan: studyPlanRouter
+
+#### UI
+
+- [ ] `apps/web/src/app/(app)/study/page.tsx` — Study Queue: ordered task list, readiness score meter, exam countdown
+- [ ] `apps/web/src/components/workspace/ExamPrepBanner.tsx` — banner in workspace when exam date set
+
+### 2D — Remediation + Notifications
+
+#### Trigger.dev job
+
+- [ ] `trigger/src/jobs/generate-remediation.ts` — concept weakness data → hybrid_search chunks → mini-lesson (500-800 words) + 3 practice questions via LLM → insert lessons (type='remediation') → ai_requests row
+
+#### tRPC procedures (add to existing routers)
+
+- [ ] `mastery.getRemediationPath(workspaceId, conceptId)` — trigger remediation job, return lessonId
+- [ ] `notification.getDailyDigest(workspaceId?)` — { dueFlashcards, fadingConcepts, studyStreakDays }
+- [ ] `apps/web/src/server/routers/notification.ts` — new router
+- [ ] `apps/web/src/server/routers/_app.ts` — add notification: notificationRouter
+
+#### UI
+
+- [ ] `apps/web/src/components/mastery/RemediationButton.tsx` — "Fix now" button on struggling concepts
+- [ ] Notification badge in Sidebar (due count from getDailyDigest)
+
+### 2E — Professor/Instructor Tools
+
+#### Migration
+
+- [ ] `supabase/migrations/0012_phase2e_instructor.sql` — instructor_profiles, courses, course_enrollments, course_documents + RLS + join_code generation
+- [ ] Apply via Supabase MCP
+
+#### Validators (test-first)
+
+- [ ] `packages/validators/src/__tests__/course.test.ts` — failing tests for course schemas
+- [ ] `packages/validators/src/course.ts` — createCourseSchema, joinCourseSchema, addDocumentSchema
+- [ ] `packages/validators/src/index.ts` — export course schemas
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/course.contract.test.ts` — UNAUTHORIZED, create, list, get, join
+- [ ] `apps/web/src/server/routers/course.ts` — create, list, get, addDocument, removeDocument, inviteStudent, join, getConfusionAnalytics, getAtRiskStudents
+- [ ] `apps/web/src/server/routers/_app.ts` — add course: courseRouter
+
+#### UI
+
+- [ ] `apps/web/src/app/(app)/instructor/page.tsx` — instructor dashboard: course list with student count + avg mastery, Create course button
+- [ ] `apps/web/src/app/(app)/instructor/[courseId]/page.tsx` — course detail: student roster + mastery table, concept confusion heatmap, join code, document list
+- [ ] `apps/web/src/app/(app)/instructor/[courseId]/join/page.tsx` — student join page via code
+
+### Phase 2 Verification Gate
+
+- [ ] `pnpm typecheck` — zero errors
+- [ ] `pnpm lint` — zero errors
+- [ ] `pnpm test:unit` — all green
+- [ ] `pnpm --filter web test:contract` — all green
+- [ ] Playwright: /workspace/[id]/exam → Generate Exam → exam appears
+- [ ] Playwright: /workspace/[id]/exam/[id] → take exam → score screen
+- [ ] Playwright: /study → plan renders
+- [ ] Playwright: /instructor → page loads (empty state)
+- [ ] Architecture audit: no async in handlers, all LLM calls tracked, no files over 400 lines
+- [ ] `git push origin feat/phase-2-retention-institutional`
+- [ ] Mark [x] phase-2-retention-institutional in tasks/phases.md
