@@ -215,20 +215,20 @@ Phase 1C complete with corrections. 8 DB tables + RLS deployed via migrations 00
 
 #### Step 2 — Database migration
 
-- [ ] `supabase/migrations/0005_phase1d_lessons.sql`:
+- [x] `supabase/migrations/0005_phase1d_lessons.sql`:
   - `lessons` table: id, workspace_id, user_id, title, order_index, content_markdown, structured_sections JSONB, summary, key_takeaways TEXT[], prompt_version, model_used, generation_cost_cents, syllabus_topic_id UUID REFERENCES syllabus_topics(id) ON DELETE SET NULL, source_updated BOOLEAN, is_completed BOOLEAN, completed_at, time_spent_seconds, created_at, updated_at
   - `lesson_concepts` table: lesson_id, concept_id, is_primary BOOLEAN, PRIMARY KEY(lesson_id, concept_id)
   - RLS on both tables (workspace owner via JOIN users)
   - Indexes: idx_lessons_workspace ON lessons(workspace_id, order_index), idx_lesson_concepts_lesson ON lesson_concepts(lesson_id)
-- [ ] Apply migration via Supabase MCP
+- [x] Apply migration via Supabase MCP
 
 #### Step 3 — Drizzle schema update
 
-- [ ] `apps/web/src/server/db/schema.ts` — add `lessons` table + `lessonConcepts` table (mirror migration exactly)
+- [x] `apps/web/src/server/db/schema.ts` — add `lessons` table + `lessonConcepts` table (mirror migration exactly)
 
 #### Step 4 — Prompt file
 
-- [ ] `apps/web/src/lib/ai/prompts/lesson-generation.v1.ts`:
+- [x] `apps/web/src/lib/ai/prompts/lesson-generation.v1.ts`:
   - `buildLessonPrompt(params: { concept: string, prerequisites: string[], retrievedChunks: string[], persona?: PersonaContext }): string`
   - `LESSON_COMPONENT_INSTRUCTIONS` (from docs/10-generative-ui.md)
   - `PROMPT_VERSION = 'lesson-generation.v1'`
@@ -236,9 +236,9 @@ Phase 1C complete with corrections. 8 DB tables + RLS deployed via migrations 00
 
 #### Step 5 — Trigger.dev job (unit tests first for pure logic)
 
-- [ ] `trigger/src/__tests__/lesson-ordering.test.ts` — test topological sort of concepts by prerequisites
-- [ ] `trigger/src/lib/concept-ordering.ts` — `orderConceptsByPrerequisites(concepts, relations): Concept[]` (Kahn's algorithm)
-- [ ] `trigger/src/jobs/generate-lessons.ts`:
+- [x] `trigger/src/__tests__/lesson-ordering.test.ts` — test topological sort of concepts by prerequisites
+- [x] `trigger/src/lib/concept-ordering.ts` — `orderConceptsByPrerequisites(concepts, relations): Concept[]` (Kahn's algorithm)
+- [x] `trigger/src/jobs/generate-lessons.ts`:
   - id: 'generate-lessons'
   - payload: `{ workspaceId: string, userId: string }`
   - Steps:
@@ -257,37 +257,50 @@ Phase 1C complete with corrections. 8 DB tables + RLS deployed via migrations 00
 
 #### Step 6 — tRPC contract tests (FAILING first) → implement
 
-- [ ] `apps/web/src/server/routers/__tests__/lesson.contract.test.ts`:
+- [x] `apps/web/src/server/routers/__tests__/lesson.contract.test.ts`:
   - `lesson.list` — UNAUTHORIZED when no session; returns [] for workspace with no lessons; returns lessons after seeding
   - `lesson.get` — UNAUTHORIZED; NOT_FOUND for wrong workspace; returns lesson with sections
   - `lesson.markComplete` — UNAUTHORIZED; marks lesson as complete, sets completed_at
   - `lesson.triggerGenerate` — UNAUTHORIZED; enqueues generate-lessons job, returns jobId
-- [ ] `apps/web/src/server/routers/lesson.ts` — implement all 4 procedures
-- [ ] `apps/web/src/server/routers/_app.ts` — merge lessonRouter
+- [x] `apps/web/src/server/routers/lesson.ts` — implement all 4 procedures
+- [x] `apps/web/src/server/routers/_app.ts` — merge lessonRouter
 
 #### Step 7 — UI components
 
-- [ ] `apps/web/src/components/lesson/sections/TextSection.tsx`
-- [ ] `apps/web/src/components/lesson/sections/ConceptDefinition.tsx`
-- [ ] `apps/web/src/components/lesson/sections/ProcessFlow.tsx`
-- [ ] `apps/web/src/components/lesson/sections/ComparisonTable.tsx`
-- [ ] `apps/web/src/components/lesson/sections/AnalogyCard.tsx`
-- [ ] `apps/web/src/components/lesson/sections/KeyTakeaway.tsx`
-- [ ] `apps/web/src/components/lesson/sections/MiniQuiz.tsx`
-- [ ] `apps/web/src/components/lesson/sections/QuoteBlock.tsx`
-- [ ] `apps/web/src/components/lesson/sections/Timeline.tsx`
-- [ ] `apps/web/src/components/lesson/sections/ConceptBridge.tsx`
-- [ ] `apps/web/src/components/lesson/sections/CodeExplainer.tsx`
-- [ ] `apps/web/src/components/lesson/LessonRenderer.tsx` — routes section.type to component
-- [ ] `apps/web/src/components/lesson/LessonCard.tsx` — card in list (title, completion status, concept count)
-- [ ] `apps/web/src/components/lesson/LessonList.tsx` — trpc.lesson.list.useQuery, loading skeleton, empty state + generate button
-- [ ] `apps/web/src/app/(app)/workspace/[id]/lesson/[lessonId]/page.tsx` — lesson detail with LessonRenderer + prev/next nav + mark complete button
-- [ ] Update `apps/web/src/app/(app)/workspace/[id]/page.tsx` — add Lessons tab
+- [x] `apps/web/src/components/lesson/sections/TextSection.tsx`
+- [x] `apps/web/src/components/lesson/sections/ConceptDefinition.tsx`
+- [x] `apps/web/src/components/lesson/sections/ProcessFlow.tsx`
+- [x] `apps/web/src/components/lesson/sections/ComparisonTable.tsx`
+- [x] `apps/web/src/components/lesson/sections/AnalogyCard.tsx`
+- [x] `apps/web/src/components/lesson/sections/KeyTakeaway.tsx`
+- [x] `apps/web/src/components/lesson/sections/MiniQuiz.tsx`
+- [x] `apps/web/src/components/lesson/sections/QuoteBlock.tsx`
+- [x] `apps/web/src/components/lesson/sections/Timeline.tsx`
+- [x] `apps/web/src/components/lesson/sections/ConceptBridge.tsx`
+- [x] `apps/web/src/components/lesson/sections/CodeExplainer.tsx`
+- [x] `apps/web/src/components/lesson/LessonRenderer.tsx` — routes section.type to component
+- [x] `apps/web/src/components/lesson/LessonCard.tsx` — card in list (title, completion status, concept count)
+- [x] `apps/web/src/components/lesson/LessonList.tsx` — trpc.lesson.list.useQuery, loading skeleton, empty state + generate button
+- [x] `apps/web/src/app/(app)/workspace/[id]/lesson/[lessonId]/page.tsx` — lesson detail with LessonRenderer + prev/next nav + mark complete button
+- [x] Update `apps/web/src/app/(app)/workspace/[id]/page.tsx` — add Lessons tab
 
 ### Verification
 
-- [ ] `pnpm test:unit` — lesson-ordering tests + all prior tests pass
-- [ ] `pnpm --filter web test:contract` — lesson procedures pass + all prior procedures pass
-- [ ] `pnpm typecheck` — all packages clean
-- [ ] `pnpm lint` — zero errors
-- [ ] Browser: workspace → Lessons tab → Generate Lessons → lessons appear → click lesson → LessonRenderer shows structured components → Mark Complete works
+- [x] `pnpm test:unit` — lesson-ordering tests + all prior tests pass (123 unit tests)
+- [x] `pnpm --filter web test:contract` — lesson procedures pass + all prior procedures pass (49 contract tests)
+- [x] `pnpm typecheck` — all packages clean
+- [x] `pnpm lint` — zero errors
+- [x] Browser: workspace → Lessons tab → Generate Lessons → lessons appear → click lesson → LessonRenderer shows structured components → Mark Complete works
+
+### Phase 1D Summary
+
+**Completed:** 2026-03-15. All Phase 1D deliverables implemented TDD-first.
+
+- 11 LessonSection types (discriminatedUnion): text, concept_definition, process_flow, comparison_table, analogy_card, key_takeaway, mini_quiz, quote_block, timeline, concept_bridge, code_explainer
+- Kahn's algorithm topological sort for concept ordering (cycle-safe)
+- `generate-lessons` Trigger.dev job: fetches concepts → topo-sorts → RAG per concept → generateObject (claude-sonnet-4-6) → inserts lessons
+- 4 tRPC procedures: lesson.list, lesson.get, lesson.markComplete, lesson.triggerGenerate
+- 11 section React components + LessonRenderer + LessonList + LessonCard + lesson detail page
+- Workspace page updated with Lessons tab
+- 123 unit tests, 49 contract tests, all packages typecheck clean
+- **Lesson learned:** lint-staged + turbo incompatible (turbo rejects file path args) — removed pnpm lint from lint-staged, kept only prettier.
