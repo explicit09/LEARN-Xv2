@@ -46,3 +46,17 @@ export {
   submitReviewSchema,
   triggerGenerateFlashcardsSchema,
 } from './flashcard'
+export {
+  examStatusEnum,
+  questionTypeEnum,
+  bloomLevelEnum,
+  createExamSchema,
+  startExamSchema,
+  submitExamResponseSchema,
+  completeExamSchema,
+  joinExamSchema,
+  getExamSchema,
+  listExamsSchema,
+  generateExamSchema,
+  shareExamSchema,
+} from './exam'

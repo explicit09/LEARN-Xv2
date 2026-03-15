@@ -22,6 +22,7 @@ const TABS = [
   { key: 'quiz', label: 'Quizzes' },
   { key: 'flashcards', label: 'Flashcards' },
   { key: 'mastery', label: 'Mastery' },
+  { key: 'exam', label: 'Exams' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -108,6 +109,19 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
           </div>
         )}
         {activeTab === 'mastery' && <MasteryDashboard workspaceId={id} />}
+        {activeTab === 'exam' && (
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              Formal timed exams with Bloom&apos;s-tagged questions
+            </p>
+            <Link
+              href={`/workspace/${id}/exam`}
+              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
+            >
+              View Exams
+            </Link>
+          </div>
+        )}
       </div>
     </>
   )
