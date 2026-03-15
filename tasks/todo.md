@@ -209,9 +209,9 @@ Phase 1C complete with corrections. 8 DB tables + RLS deployed via migrations 00
 
 #### Step 1 — Validator tests (FAILING first) → implement
 
-- [ ] `packages/validators/src/__tests__/lesson.test.ts` — lessonSectionSchema (all types), lessonStatusEnum
-- [ ] `packages/validators/src/lesson.ts` — lessonSectionSchema (discriminated union), listLessonsSchema, getLessonSchema, markCompleteSchema
-- [ ] `packages/validators/src/index.ts` — export lesson schemas
+- [x] `packages/validators/src/__tests__/lesson.test.ts` — lessonSectionSchema (all types), 21 tests pass
+- [x] `packages/validators/src/lesson.ts` — lessonSectionSchema (discriminated union), listLessonsSchema, getLessonSchema, markCompleteSchema
+- [x] `packages/validators/src/index.ts` — export lesson schemas
 
 #### Step 2 — Database migration
 
