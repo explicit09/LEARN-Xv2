@@ -9,7 +9,7 @@ describe('orderConceptsByPrerequisites', () => {
     const concepts: Concept[] = [{ id: 'a', name: 'A' }]
     const result = orderConceptsByPrerequisites(concepts, [])
     expect(result).toHaveLength(1)
-    expect(result[0].id).toBe('a')
+    expect(result[0]?.id).toBe('a')
   })
 
   it('returns concepts with no relations in original order', () => {
