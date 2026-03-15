@@ -293,6 +293,52 @@ export const syllabusTopicDocuments = pgTable(
 )
 
 // ============================================================
+// Lessons
+// ============================================================
+
+export const lessons = pgTable('lessons', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id),
+  title: text('title').notNull(),
+  orderIndex: integer('order_index').notNull().default(0),
+  contentMarkdown: text('content_markdown').notNull().default(''),
+  structuredSections: jsonb('structured_sections').notNull().default([]),
+  summary: text('summary'),
+  keyTakeaways: text('key_takeaways').array(),
+  promptVersion: text('prompt_version'),
+  modelUsed: text('model_used'),
+  generationCostCents: integer('generation_cost_cents'),
+  syllabusTopicId: uuid('syllabus_topic_id').references(() => syllabusTopics.id, {
+    onDelete: 'set null',
+  }),
+  sourceUpdated: boolean('source_updated').notNull().default(false),
+  isCompleted: boolean('is_completed').notNull().default(false),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  timeSpentSeconds: integer('time_spent_seconds').default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const lessonConcepts = pgTable(
+  'lesson_concepts',
+  {
+    lessonId: uuid('lesson_id')
+      .notNull()
+      .references(() => lessons.id, { onDelete: 'cascade' }),
+    conceptId: uuid('concept_id')
+      .notNull()
+      .references(() => concepts.id, { onDelete: 'cascade' }),
+    isPrimary: boolean('is_primary').notNull().default(false),
+  },
+  (table) => [primaryKey({ columns: [table.lessonId, table.conceptId] })],
+)
+
+// ============================================================
 // AI requests (cost tracking + observability)
 // ============================================================
 

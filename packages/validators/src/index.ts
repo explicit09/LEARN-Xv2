@@ -14,3 +14,11 @@ export { LEARNING_EVENTS } from './events'
 export type { LearningEventType } from './events'
 export { conceptRelationTypeEnum, conceptSchema } from './concept'
 export type { Concept, ConceptRelationType } from './concept'
+export {
+  lessonSectionSchema,
+  listLessonsSchema,
+  getLessonSchema,
+  markCompleteSchema,
+  triggerGenerateLessonsSchema,
+} from './lesson'
+export type { LessonSection } from './lesson'

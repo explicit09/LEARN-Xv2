@@ -27,12 +27,6 @@
     "lint-staged": "^15"
   },
   "lint-staged": {
-    "*.{ts,tsx}": [
-      "pnpm lint",
-      "prettier --write"
-    ],
-    "*.{json,md,yaml}": [
-      "prettier --write"
-    ]
+    "*.{ts,tsx,json,md,yaml}": "prettier --write"
   }
 }
