@@ -17,6 +17,7 @@ const TABS = [
   { key: 'concepts', label: 'Concepts' },
   { key: 'syllabus', label: 'Syllabus' },
   { key: 'lessons', label: 'Lessons' },
+  { key: 'chat', label: 'Chat' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -67,6 +68,17 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
         {activeTab === 'concepts' && <ConceptList workspaceId={id} />}
         {activeTab === 'syllabus' && <SyllabusView workspaceId={id} hasDocuments={hasDocuments} />}
         {activeTab === 'lessons' && <LessonList workspaceId={id} />}
+        {activeTab === 'chat' && (
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">Chat with your course materials</p>
+            <Link
+              href={`/workspace/${id}/chat`}
+              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
+            >
+              Open Chat
+            </Link>
+          </div>
+        )}
       </div>
     </>
   )

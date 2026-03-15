@@ -304,3 +304,97 @@ Phase 1C complete with corrections. 8 DB tables + RLS deployed via migrations 00
 - Workspace page updated with Lessons tab
 - 123 unit tests, 49 contract tests, all packages typecheck clean
 - **Lesson learned:** lint-staged + turbo incompatible (turbo rejects file path args) — removed pnpm lint from lint-staged, kept only prettier.
+
+---
+
+## Phase 1E — Grounded Chat
+
+**Branch:** feat/phase-1E-grounded-chat
+
+### Docs read (mandatory before coding)
+
+- [x] `docs/07-ai-pipeline.md` — full-context vs RAG decision gate, MODEL_ROUTES (CHAT/FULL_CONTEXT_CHAT), prompt caching blocks, ai_requests Rule 6
+- [x] `docs/03-database.md` — chat_sessions + chat_messages schema, RLS pattern
+- [x] `docs/01-architecture.md` — ADR-008 SSE for streaming, ADR-005 Vercel AI SDK route for streaming
+
+### Plan
+
+#### Step 1 — Validator tests (FAILING first) → implement
+
+- [ ] `packages/validators/src/__tests__/chat.test.ts`:
+  - `createChatSessionSchema` validates workspaceId uuid, optional lessonId uuid
+  - `sendMessageSchema` validates sessionId uuid, content non-empty string
+  - rejects invalid uuids
+- [ ] `packages/validators/src/chat.ts`:
+  - `createChatSessionSchema`, `listChatSessionsSchema`, `getChatSessionSchema`, `deleteChatSessionSchema`, `sendMessageSchema`
+- [ ] `packages/validators/src/index.ts` — export chat schemas
+
+#### Step 2 — Database migration
+
+- [ ] `supabase/migrations/0006_phase1e_chat.sql`:
+  - `chat_sessions` table: id, workspace_id, user_id, lesson_id REFERENCES lessons(id) ON DELETE SET NULL, title TEXT, created_at, updated_at
+  - `chat_messages` table: id, session_id REFERENCES chat_sessions(id) ON DELETE CASCADE, role TEXT CHECK IN ('user','assistant','system'), content TEXT NOT NULL, cited_chunk_ids UUID[], model_used TEXT, token_count INTEGER, latency_ms INTEGER, created_at
+  - Indexes: idx_chat_sessions_workspace, idx_chat_messages_session
+  - RLS: chat_sessions workspace-scoped (JOIN users u ON u.id = w.user_id WHERE u.auth_id = auth.uid()); chat_messages via session
+- [ ] Apply migration via Supabase MCP
+
+#### Step 3 — Drizzle schema update
+
+- [ ] `apps/web/src/server/db/schema.ts` — add `chatSessions` + `chatMessages` tables mirroring migration exactly
+
+#### Step 4 — Prompt file
+
+- [ ] `apps/web/src/lib/ai/prompts/chat-system.v1.ts`:
+  - `buildChatSystemPrompt(params: { workspaceName: string, persona?: PersonaContext }): string`
+  - `CHAT_PROMPT_VERSION = 'chat-system.v1'`
+  - Static instructions block (cacheable prefix) + persona block
+
+#### Step 5 — Streaming API route
+
+- [ ] `apps/web/src/app/api/chat/route.ts` (POST handler):
+  1. Auth check: get Supabase user, load `users` row + workspace ownership
+  2. Load session: validate sessionId belongs to workspace
+  3. Load workspace `total_token_count`
+  4. **Decision gate:** `total_token_count < 500_000` → full-context (fetch document texts, build cached blocks, use `MODEL_ROUTES.FULL_CONTEXT_CHAT = claude-opus-4-6`) else RAG (embed query → `hybrid_search` → 8 chunks, use `MODEL_ROUTES.CHAT = claude-sonnet-4-6`)
+  5. Build messages: `[systemBlock, ...conversationHistory, userMessage]`
+  6. `streamText({ model: anthropic(modelId), messages })` with `onFinish`:
+     - Persist assistant message to `chat_messages` (content, cited_chunk_ids, token_count, latency_ms)
+     - Insert `ai_requests` row (task_type: 'chat', provider: 'anthropic', model, prompt_version, input/output tokens, latency, cost_cents, was_cached)
+  7. Return `result.toDataStreamResponse()`
+- [ ] Input schema: `{ sessionId: string, message: string }`
+
+#### Step 6 — tRPC contract tests (FAILING first) → implement
+
+- [ ] `apps/web/src/server/routers/__tests__/chat.contract.test.ts`:
+  - `chat.createSession` — UNAUTHORIZED; creates session + returns id, workspaceId; sets lesson_id when provided
+  - `chat.listSessions` — UNAUTHORIZED; returns [] for empty workspace; returns sessions ordered by updated_at DESC
+  - `chat.getSession` — UNAUTHORIZED; NOT_FOUND wrong workspace; returns session with messages array
+  - `chat.deleteSession` — UNAUTHORIZED; deletes session; cascades to messages
+- [ ] `apps/web/src/server/routers/chat.ts`:
+  - `chat.createSession` — insert session row, return it
+  - `chat.listSessions` — list sessions for workspace ordered by updated_at DESC
+  - `chat.getSession` — get session + its messages ordered by created_at ASC
+  - `chat.deleteSession` — delete by id + workspace ownership check
+- [ ] `apps/web/src/server/routers/_app.ts` — merge chatRouter
+
+#### Step 7 — UI components
+
+- [ ] `apps/web/src/components/chat/ChatMessage.tsx` — displays single message; assistant messages show citation badges; badge click → popover with chunk text + doc title
+- [ ] `apps/web/src/components/chat/CitationPopover.tsx` — Radix popover showing cited chunk content
+- [ ] `apps/web/src/components/chat/ChatInput.tsx` — textarea with send button (cmd+enter to submit)
+- [ ] `apps/web/src/components/chat/ChatSessionList.tsx` — list of sessions in sidebar, "New Chat" button, active session highlight
+- [ ] `apps/web/src/components/chat/ChatInterface.tsx` (client, 'use client'):
+  - `useChat` from `ai/react` with `api: '/api/chat'`, `body: { sessionId }`
+  - On `onFinish`: invalidate `chat.getSession` via `trpc.useUtils()`
+  - Scrolls to bottom on new message
+  - Loading indicator while streaming
+- [ ] `apps/web/src/app/(app)/workspace/[id]/chat/page.tsx` — creates new session then redirects to `/workspace/[id]/chat/[sessionId]`
+- [ ] `apps/web/src/app/(app)/workspace/[id]/chat/[sessionId]/page.tsx` — server component; loads session; renders ChatInterface + ChatSessionList
+
+### Verification
+
+- [ ] `pnpm test:unit` — chat validator tests pass + all prior tests pass
+- [ ] `pnpm --filter web test:contract` — chat procedures pass + all prior procedures pass
+- [ ] `pnpm typecheck` — all packages clean
+- [ ] `pnpm lint` — zero errors
+- [ ] Browser: workspace → Chat tab → send message → streaming response → citation badges appear → new session creates cleanly

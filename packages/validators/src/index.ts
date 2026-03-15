@@ -22,3 +22,10 @@ export {
   triggerGenerateLessonsSchema,
 } from './lesson'
 export type { LessonSection } from './lesson'
+export {
+  createChatSessionSchema,
+  deleteChatSessionSchema,
+  getChatSessionSchema,
+  listChatSessionsSchema,
+  sendMessageSchema,
+} from './chat'
