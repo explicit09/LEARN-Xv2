@@ -36,7 +36,9 @@ Check `tasks/todo.md` for a checklist under the active phase heading.
   - Trigger.dev jobs (if needed)
   - UI components and pages
   - Verification steps
+- Create and switch to a feature branch: `git checkout -b feat/<phase-name>`
 - Commit: `git commit -m "chore: plan for <phase-name>"`
+- Push branch: `git push -u origin feat/<phase-name>`
 - Output: `Plan written. Starting implementation next iteration.`
 - Stop here. Implementation begins next iteration.
 
@@ -139,8 +141,11 @@ When all items checked off and all verification passes:
 2. Update `tasks/lessons.md` with anything surprising or worth remembering
 3. Mark the phase complete in `tasks/phases.md`: `[x] phase-name`
 4. Commit: `git commit -m "chore: complete <phase-name>"`
-5. Push: `git push origin main`
-6. Output exactly: `<promise>PHASE_COMPLETE</promise>`
+5. Push the branch: `git push origin feat/<phase-name>`
+6. Open a PR: `gh pr create --title "feat: <phase-name>" --base main --body "Automated implementation of <phase-name>. All checks passing: typecheck, lint, unit tests, contract tests, integration tests, Playwright visual verification, Paper.design cross-check, architecture audit."`
+7. Merge the PR: `gh pr merge --squash --auto --delete-branch`
+8. Switch back to main and pull: `git checkout main && git pull origin main`
+9. Output exactly: `<promise>PHASE_COMPLETE</promise>`
 
 ---
 
