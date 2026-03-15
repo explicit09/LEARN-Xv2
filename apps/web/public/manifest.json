@@ -1,0 +1,37 @@
+{
+  "name": "LEARN-X",
+  "short_name": "LEARN-X",
+  "description": "Your adaptive learning operating system",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/dashboard",
+      "description": "Go to your learning dashboard"
+    },
+    {
+      "name": "Study Queue",
+      "url": "/study",
+      "description": "Review today's study plan"
+    }
+  ]
+}

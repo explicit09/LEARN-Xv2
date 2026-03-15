@@ -23,6 +23,7 @@ const TABS = [
   { key: 'flashcards', label: 'Flashcards' },
   { key: 'mastery', label: 'Mastery' },
   { key: 'exam', label: 'Exams' },
+  { key: 'graph', label: 'Graph' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -119,6 +120,19 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
               className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
             >
               View Exams
+            </Link>
+          </div>
+        )}
+        {activeTab === 'graph' && (
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              Force-directed map of all concepts and their relationships
+            </p>
+            <Link
+              href={`/workspace/${id}/graph`}
+              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
+            >
+              Open Knowledge Graph
             </Link>
           </div>
         )}

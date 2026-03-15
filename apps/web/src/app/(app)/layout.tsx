@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { SkipLink } from '@/components/layout/SkipLink'
+import { OfflineBanner } from '@/components/layout/OfflineBanner'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -13,9 +15,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <main className="flex flex-1 flex-col overflow-auto">{children}</main>
-    </div>
+    <>
+      <SkipLink />
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar />
+        <main id="main-content" className="flex flex-1 flex-col overflow-auto" tabIndex={-1}>
+          {children}
+        </main>
+      </div>
+      <OfflineBanner />
+    </>
   )
 }

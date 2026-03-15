@@ -66,3 +66,22 @@ export {
   addDocumentSchema,
   updateCourseSchema,
 } from './course'
+export {
+  tagConceptSchema,
+  getGraphSchema,
+  graphNodeSchema,
+  graphEdgeSchema,
+} from './knowledgeGraph'
+export type { TagConceptInput, GetGraphInput, GraphNode, GraphEdge } from './knowledgeGraph'
+export {
+  createRoomSchema,
+  joinRoomSchema,
+  sendRoomMessageSchema,
+  listRoomsSchema,
+} from './studyRoom'
+export type {
+  CreateRoomInput,
+  JoinRoomInput,
+  SendRoomMessageInput,
+  ListRoomsInput,
+} from './studyRoom'

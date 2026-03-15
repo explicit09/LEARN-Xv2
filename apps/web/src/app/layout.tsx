@@ -8,6 +8,12 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'LEARN-X',
   description: 'Turn your course materials into adaptive mastery',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'LEARN-X',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
