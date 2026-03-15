@@ -13,5 +13,5 @@ to find the next phase to implement. Never reorder completed phases.
 - [x] phase-1E-grounded-chat
 - [x] phase-1F-quizzes-flashcards
 - [x] phase-1G-mastery-dashboard
-- [ ] phase-2-retention-institutional
-- [ ] phase-3-platform-expansion
+- [x] phase-2-retention-institutional
+- [x] phase-3-platform-expansion
