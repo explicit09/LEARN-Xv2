@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Topbar } from '@/components/layout/Topbar'
 import { WorkspaceDocuments } from '@/components/document/WorkspaceDocuments'
 import { ConceptList } from '@/components/concept/ConceptList'
+import { LessonList } from '@/components/lesson/LessonList'
 import { SyllabusView } from '@/components/syllabus/SyllabusView'
 import { createServerCaller } from '@/lib/trpc/server'
 
@@ -15,6 +16,7 @@ const TABS = [
   { key: 'documents', label: 'Documents' },
   { key: 'concepts', label: 'Concepts' },
   { key: 'syllabus', label: 'Syllabus' },
+  { key: 'lessons', label: 'Lessons' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -22,7 +24,9 @@ type TabKey = (typeof TABS)[number]['key']
 export default async function WorkspacePage({ params, searchParams }: WorkspacePageProps) {
   const { id } = await params
   const { tab } = await searchParams
-  const activeTab: TabKey = (TABS.map((t) => t.key).includes(tab as TabKey) ? tab : 'documents') as TabKey
+  const activeTab: TabKey = (
+    TABS.map((t) => t.key).includes(tab as TabKey) ? tab : 'documents'
+  ) as TabKey
 
   const caller = await createServerCaller()
 
@@ -61,9 +65,8 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
         {/* Tab content */}
         {activeTab === 'documents' && <WorkspaceDocuments workspaceId={id} />}
         {activeTab === 'concepts' && <ConceptList workspaceId={id} />}
-        {activeTab === 'syllabus' && (
-          <SyllabusView workspaceId={id} hasDocuments={hasDocuments} />
-        )}
+        {activeTab === 'syllabus' && <SyllabusView workspaceId={id} hasDocuments={hasDocuments} />}
+        {activeTab === 'lessons' && <LessonList workspaceId={id} />}
       </div>
     </>
   )
