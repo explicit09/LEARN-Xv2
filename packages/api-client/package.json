@@ -1,0 +1,19 @@
+{
+  "name": "@learn-x/api-client",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@trpc/client": "^11.1.0",
+    "@trpc/react-query": "^11.1.0",
+    "@tanstack/react-query": "^5.72.2"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

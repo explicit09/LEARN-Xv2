@@ -1,0 +1,12 @@
+{
+  "name": "@learn-x/tailwind-config",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./base": "./base.ts"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5"
+  }
+}

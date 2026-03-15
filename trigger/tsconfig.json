@@ -1,0 +1,9 @@
+{
+  "extends": "../tooling/typescript/base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["src", "trigger.config.ts"]
+}

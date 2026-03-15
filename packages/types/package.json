@@ -1,0 +1,18 @@
+{
+  "name": "@learn-x/types",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@learn-x/validators": "workspace:*",
+    "zod": "^3"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

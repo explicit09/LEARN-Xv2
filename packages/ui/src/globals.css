@@ -1,0 +1,4 @@
+/* Re-exported from apps/web — consumers import @learn-x/ui/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
