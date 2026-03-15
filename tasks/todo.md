@@ -637,10 +637,119 @@ Complete. Mastery Dashboard implemented.
 - [ ] `pnpm lint` — zero errors
 - [ ] `pnpm test:unit` — all green
 - [ ] `pnpm --filter web test:contract` — all green
-- [ ] Playwright: /workspace/[id]/exam → Generate Exam → exam appears
-- [ ] Playwright: /workspace/[id]/exam/[id] → take exam → score screen
-- [ ] Playwright: /study → plan renders
-- [ ] Playwright: /instructor → page loads (empty state)
-- [ ] Architecture audit: no async in handlers, all LLM calls tracked, no files over 400 lines
+- [x] Playwright: /workspace/[id]/exam → Generate Exam → exam appears
+- [x] Playwright: /workspace/[id]/exam/[id] → take exam → score screen
+- [x] Playwright: /study → plan renders
+- [x] Playwright: /instructor → page loads (empty state)
+- [x] Architecture audit: no async in handlers, all LLM calls tracked, no files over 400 lines
 - [ ] `git push origin feat/phase-2-retention-institutional`
 - [ ] Mark [x] phase-2-retention-institutional in tasks/phases.md
+
+---
+
+## Phase 3 — Platform Expansion
+
+### 3A — Cross-Workspace Knowledge Graph
+
+**Goal:** Tag every concept with a canonical domain slug (e.g. `ml:gradient-descent`). Surface a global knowledge graph view for power users.
+
+#### Migration
+
+- [ ] `supabase/migrations/0013_phase3a_concept_tags.sql` — `concept_tags` (concept_id, tag, domain), `concept_relations_global` (source_canonical, target_canonical, relation_type)
+- [ ] Apply via Supabase MCP
+
+#### Validators (test-first)
+
+- [ ] `packages/validators/src/__tests__/knowledgeGraph.test.ts` — failing tests for tagConceptSchema, getGraphSchema
+- [ ] `packages/validators/src/knowledgeGraph.ts` — tagConceptSchema, getGraphSchema
+- [ ] `packages/validators/src/index.ts` — export new schemas
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/knowledgeGraph.contract.test.ts` — UNAUTHORIZED, tagConcept, getGraph returns nodes+edges
+- [ ] `apps/web/src/server/routers/knowledgeGraph.ts` — tagConcept, getGraph (aggregate from mastery_records across workspaces)
+- [ ] `apps/web/src/server/routers/_app.ts` — add knowledgeGraph: knowledgeGraphRouter
+
+#### UI
+
+- [ ] `apps/web/src/app/(app)/workspace/[id]/graph/page.tsx` — Force-directed SVG graph (D3-lite, no external dep), node color = mastery %, edge = prerequisite
+- [ ] `apps/web/src/app/(app)/workspace/[id]/page.tsx` — add 'graph' tab
+
+---
+
+### 3B — Collaborative Study Rooms
+
+**Goal:** Students in the same course can enter a live study room, see each other's real-time confusion flags, and co-trigger a shared AI Q&A session.
+
+#### Migration
+
+- [ ] `supabase/migrations/0014_phase3b_study_rooms.sql` — `study_rooms` (id, course_id, host_user_id, status, created_at), `study_room_members` (room_id, user_id, joined_at), `study_room_messages` (room_id, user_id, content, created_at)
+- [ ] Apply via Supabase MCP
+- [ ] Enable Supabase Realtime on study_room_members and study_room_messages
+
+#### Validators (test-first)
+
+- [ ] `packages/validators/src/__tests__/studyRoom.test.ts` — failing tests for createRoomSchema, joinRoomSchema, sendMessageSchema
+- [ ] `packages/validators/src/studyRoom.ts` — createRoomSchema, joinRoomSchema, sendMessageSchema
+- [ ] `packages/validators/src/index.ts` — export new schemas
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/studyRoom.contract.test.ts` — UNAUTHORIZED, create returns roomId, join NOT_FOUND for bad room, list returns []
+- [ ] `apps/web/src/server/routers/studyRoom.ts` — create, join, leave, list (open rooms for course), sendMessage, getMessages
+- [ ] `apps/web/src/server/routers/_app.ts` — add studyRoom: studyRoomRouter
+
+#### UI
+
+- [ ] `apps/web/src/app/(app)/study-room/[roomId]/page.tsx` — real-time member list (Supabase Realtime), chat panel, "Ask AI" button → shared chat session
+- [ ] `apps/web/src/app/(app)/instructor/[courseId]/page.tsx` — "Open study room" button
+
+---
+
+### 3C — Accessibility + Admin
+
+**Goal:** Full keyboard navigation, screen reader support (ARIA), admin panel for usage metrics.
+
+#### Accessibility audit + fixes
+
+- [ ] Run axe audit via Playwright on /dashboard, /workspace/[id], /study, /instructor
+- [ ] Fix all critical + serious violations (role attributes, focus management, contrast)
+- [ ] `apps/web/src/components/layout/SkipLink.tsx` — "Skip to content" link
+- [ ] Add `aria-label` / `aria-describedby` to all interactive elements missing them
+- [ ] Keyboard focus trap in all modals (CreateCourseModal, etc.)
+
+#### Admin panel (protected route, role=admin RLS)
+
+- [ ] `supabase/migrations/0015_phase3c_admin.sql` — `user_roles` (user_id, role ENUM['user','admin']), RLS for admin-only queries
+- [ ] `apps/web/src/server/routers/admin.ts` — getUsageStats (total users, workspaces, documents, AI requests in last 30d), listUsers
+- [ ] `apps/web/src/app/(app)/admin/page.tsx` — metrics dashboard: user count, doc count, AI request count, top workspaces
+
+---
+
+### 3D — Offline Mode (PWA)
+
+**Goal:** Cache last-accessed workspace + due flashcards for offline use. Sync when reconnected.
+
+#### PWA setup
+
+- [ ] Add `next-pwa` or `serwist` to web app
+- [ ] `apps/web/public/manifest.json` — PWA manifest (name, icons, theme_color)
+- [ ] Service worker: cache /dashboard, /workspace/[id] shell, flashcard review assets
+- [ ] `apps/web/src/components/layout/OfflineBanner.tsx` — "You're offline — showing cached data" banner
+- [ ] Background sync: queue flashcard reviews when offline, flush on reconnect
+
+---
+
+### Phase 3 Verification Gate
+
+- [ ] `pnpm typecheck` — zero errors
+- [ ] `pnpm lint` — zero errors
+- [ ] `pnpm test:unit` — all green
+- [ ] `pnpm --filter web test:contract` — all green
+- [ ] Playwright: /workspace/[id]/graph → graph renders with nodes
+- [ ] Playwright: /study-room/[id] → real-time member list visible
+- [ ] Playwright: axe audit passes on /dashboard and /workspace/[id]
+- [ ] Playwright: offline simulation — flashcard review still works
+- [ ] Architecture audit: no async in handlers, all LLM calls tracked, no files over 400 lines
+- [ ] `git push origin feat/phase-3-platform-expansion`
+- [ ] Mark [x] phase-3-platform-expansion in tasks/phases.md
