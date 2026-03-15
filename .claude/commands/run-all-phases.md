@@ -1,127 +1,83 @@
 # Run All Phases — Full LEARN-X Build Loop
 
-Runs every phase in `tasks/phases.md` sequentially, one ralph loop per phase.
-Each phase gets a fresh context window. The outer loop only advances when the
-current phase outputs `PHASE_COMPLETE`. A `PHASE_BLOCKED` result halts
-everything and notifies you.
+Runs every unchecked phase in `tasks/phases.md` sequentially using the
+ralph-loop process defined in `.claude/commands/ralph-loop.md`.
 
-## How to invoke
-
-```bash
-/run-all-phases
-```
-
-No arguments needed. All state lives in `tasks/phases.md` and `tasks/todo.md`.
+State lives entirely in files and git — not in model memory.
+Each iteration re-reads `tasks/phases.md` and `tasks/todo.md` to orient itself.
 
 ---
 
-## Setup (do this once before first run)
+## Invoke with
 
-Create `tasks/phases.md` listing your phases in order:
-
-```markdown
-# LEARN-X Phases
-
-- [ ] phase-0-foundation
-- [ ] phase-1-document-ingestion
-- [ ] phase-2-lesson-engine
-- [ ] phase-3-quiz-and-flashcards
-- [ ] phase-4-mastery-tracking
-- [ ] phase-5-personalization
-- [ ] phase-6-generative-ui
 ```
-
-Mark phases as `[x]` when complete. The runner reads this file to find the
-next unchecked phase each time it starts.
-
----
-
-## What the runner does
-
-### FOR EACH unchecked phase in `tasks/phases.md`:
-
-**1. Plan gate (fresh context — do not skip)**
-
-Switch to Plan Mode. Before writing a single line of code:
-- Read `CLAUDE.md`, `docs/01-architecture.md`, `docs/04-repo-structure.md`
-- Read the phase-specific doc that `CLAUDE.md` references
-- Open paper.design and note the relevant screens and component specs
-- Write a plan: files to touch, rules in play, test strategy, open questions
-- Write the plan as checkable items to `tasks/todo.md`
-- Commit: `git commit -m "chore: todo for <phase-name>"`
-- Clear context: `/clear`
-
-**2. Ralph loop (one loop per phase)**
-
-```bash
 /ralph-loop "
-Phase: <phase-name>
-
-Read tasks/todo.md.
-Implement the current unchecked phase top-to-bottom using TDD:
-  - Write failing test → confirm failure → implement → pass → commit → check off
-Run all verification: typecheck, lint, unit tests, contract tests,
-integration tests, Playwright flows, paper.design cross-check,
-architecture rules audit (see .claude/commands/ralph-loop.md for full detail).
-Output <promise>PHASE_COMPLETE</promise> only when every check passes.
-After 25 iterations without completion: document blockers in tasks/lessons.md
-and output <promise>PHASE_BLOCKED</promise>.
-" --max-iterations 30 --completion-promise "PHASE_COMPLETE"
+Read .claude/commands/ralph-loop.md and follow every instruction exactly.
+Run all unchecked phases in tasks/phases.md one by one.
+Output <promise>ALL_PHASES_COMPLETE</promise> when tasks/phases.md has no unchecked phases.
+Output <promise>PHASE_BLOCKED</promise> if stuck on the same item for 3+ iterations with no progress.
+" --max-iterations 80 --completion-promise "ALL_PHASES_COMPLETE"
 ```
-
-**3. After `PHASE_COMPLETE`**
-- Check off the phase in `tasks/phases.md`: `[x] phase-name`
-- Commit: `git commit -m "chore: mark <phase-name> complete"`
-- Start next phase (go back to step 1)
-
-**4. On `PHASE_BLOCKED` or max-iterations hit**
-- **Stop the entire run-all-phases loop immediately**
-- Print a summary of what blocked and where
-- Wait for human input before continuing
-- Do NOT auto-advance to the next phase
 
 ---
 
-## Parallel variant (advanced)
+## Pre-flight checklist (do these before running)
 
-If phases are independent (no shared DB migrations, no shared types),
-you can run up to 3 in parallel using separate git worktrees:
-
-```bash
-# Terminal 1 — worktree-1
-cd repo-1 && /ralph-loop "Phase: phase-2-lesson-engine ..." --max-iterations 30 --completion-promise "PHASE_COMPLETE"
-
-# Terminal 2 — worktree-2
-cd repo-2 && /ralph-loop "Phase: phase-3-quiz-and-flashcards ..." --max-iterations 30 --completion-promise "PHASE_COMPLETE"
-```
-
-**Only do this when phases share no migration files or schema changes.**
-Parallel migration work causes merge conflicts that are hard to resolve cleanly.
+- [ ] `supabase start` is running (required for contract + integration tests)
+- [ ] `.env.local` has valid `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- [ ] `pnpm install` is up to date
+- [ ] `git status` is clean — no uncommitted changes
+- [ ] Playwright browser has both Paper.design files open:
+  - Tab 0: LEARN-X (UI designs) — https://app.paper.design/file/01KKNJ7304493HFTR1K1N1NF9Z
+  - Tab 1: LEARN-X Architecture — https://app.paper.design/file/01KKQW93XBGNEJ71527ADGGWN0
 
 ---
 
-## Full invocation reference
+## What happens each iteration
 
-| Parameter | Purpose | Recommended value |
-|-----------|---------|-------------------|
-| `"prompt"` | Task description with completion instruction | Include all 4 verification steps + `<promise>` instruction |
-| `--max-iterations` | Hard safety cap | `30` per phase |
-| `--completion-promise` | Exact string that exits the loop | `"PHASE_COMPLETE"` |
-| `/cancel-ralph` | Emergency stop | Run in same session |
+The loop re-reads `.claude/commands/ralph-loop.md` every iteration and follows it.
+No state is in model memory — everything is on disk. This is intentional.
 
-**Cost awareness:** Each iteration = one full Claude session.
-At 30 iterations × N phases, token cost adds up fast.
-Keep phases small (1–3 days of work). Large phases = more iterations = higher cost.
-Boris Cherny's rule: multiple small sessions beat one overloaded session.
+1. Reads `tasks/phases.md` → finds first unchecked phase
+2. Reads `tasks/todo.md` → checks if a plan exists for that phase
+3. **If no plan** → enters Plan Mode, reads all mandatory docs + Paper.design, writes checklist to `tasks/todo.md`, commits, stops iteration (plan appears next iteration)
+4. **If plan exists** → picks first unchecked item, writes failing test, implements, commits
+5. When all items checked off → runs full verification gate:
+   - `pnpm typecheck` + `pnpm lint` + `pnpm test:unit` + `pnpm test:contract` + `pnpm test:integration`
+   - Playwright: navigate each new screen, assert elements, screenshot
+   - Paper.design cross-check: layout, spacing, colors, states vs. LEARN-X file
+   - Architecture audit: 8 rules from `CLAUDE.md`
+6. All verification passes → marks phase `[x]` in `tasks/phases.md`, pushes, moves to next phase
+7. No unchecked phases remain → outputs `ALL_PHASES_COMPLETE`
+
+---
+
+## Cost awareness
+
+Each iteration = one full Claude context window.
+Estimate: ~5-15 iterations per phase × 4 remaining phases = 20-60 iterations.
+`--max-iterations 80` is your hard cost circuit breaker.
+
+---
+
+## Stopping and resuming
+
+**Cancel mid-run:** `/cancel-ralph`
+
+**Resume after cancel or block:** Re-run the same command above.
+The loop re-reads `tasks/phases.md` and resumes from the first unchecked phase.
+Completed items in `tasks/todo.md` stay checked — no work is repeated.
+
+**After `PHASE_BLOCKED`:** Read `tasks/lessons.md` for the blocker, fix it manually, then re-run.
 
 ---
 
 ## State files
 
-| File | Purpose |
-|------|---------|
-| `tasks/phases.md` | Phase checklist — source of truth for what's next |
-| `tasks/todo.md` | Per-phase implementation checklist |
-| `tasks/lessons.md` | Accumulated patterns — read at start of every session |
-| `.claude/commands/ralph-loop.md` | The loop each phase runs |
-| `screenshots/<phase>/` | Playwright screenshots from verification |
+| File                             | Purpose                                                           |
+| -------------------------------- | ----------------------------------------------------------------- |
+| `tasks/phases.md`                | Phase checklist — source of truth for what's done and what's next |
+| `tasks/todo.md`                  | Per-phase implementation checklist with checkboxes                |
+| `tasks/lessons.md`               | Accumulated failure patterns — read every iteration               |
+| `.claude/commands/ralph-loop.md` | Full loop instructions — read every iteration                     |
+| `screenshots/<phase>/`           | Playwright screenshots from verification                          |

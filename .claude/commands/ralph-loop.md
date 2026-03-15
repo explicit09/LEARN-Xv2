@@ -1,125 +1,178 @@
-# Ralph Loop — Single Phase Implementation
+# Ralph Loop — Iterative Phase Implementation
 
-Autonomous, gated implementation of one LEARN-X phase.
-Uses the Stop Hook to keep looping until all checks pass or max-iterations is hit.
-
-## How to invoke
-
-```bash
-/ralph-loop "
-Phase: <phase-name>
-
-Read tasks/todo.md.
-Implement the current unchecked phase top-to-bottom using the process below.
-Run all verification checks.
-Output <promise>PHASE_COMPLETE</promise> only when every check passes.
-After 25 iterations without completion: document blockers in tasks/lessons.md,
-list everything attempted, and output <promise>PHASE_BLOCKED</promise>.
-" --max-iterations 30 --completion-promise "PHASE_COMPLETE"
-```
-
-> **Note on `--completion-promise`:** uses exact string matching.
-> Claude must literally output `<promise>PHASE_COMPLETE</promise>` for the loop to exit.
-> `--max-iterations` is your hard safety net — always set it.
-> Cancel at any time with `/cancel-ralph`.
+Autonomous, gated implementation of LEARN-X phases.
+Each iteration starts fresh — state lives in files and git history, not memory.
+Boris Cherny's rule #1: always give Claude a concrete way to verify its work.
 
 ---
 
-## What Claude does each iteration
+## EVERY ITERATION STARTS HERE — Orient before touching anything
 
-### STEP 1 — Orient (every iteration starts here)
-- Read `tasks/todo.md` — find the current phase and its unchecked items
-- Read `tasks/lessons.md` — load known failure patterns before touching anything
-- Read `CLAUDE.md` — confirm rules and relevant docs
-- Check `git status` — understand what has already been changed
+1. Read `tasks/phases.md` — find the first unchecked phase. That is the active phase.
+2. Read `tasks/todo.md` — find unchecked items for the active phase.
+3. Read `tasks/lessons.md` — load known failure patterns. Do not repeat past mistakes.
+4. Read `CLAUDE.md` — confirm rules, mandatory doc reads, and conventions.
+5. Run `git status` — understand what has already been changed.
 
-### STEP 2 — Write failing test first (if item is implementation work)
+---
+
+## PHASE GATE — Does a plan exist for this phase?
+
+Check `tasks/todo.md` for a checklist under the active phase heading.
+
+### If NO plan exists → PLAN MODE
+
+- Switch to Plan Mode (do not write implementation code in this step)
+- Read every doc listed in `CLAUDE.md §Mandatory Doc Reads` that applies to this phase
+- Open the LEARN-X UI design file via Playwright:
+  - `browser_tabs select index=0` → take screenshot → note all screens for this phase
+- Open the LEARN-X Architecture file via Playwright:
+  - `browser_tabs select index=1` → take screenshot → note relevant pipeline diagrams
+- Write a detailed implementation checklist to `tasks/todo.md`:
+  - Validators (test files first, then implementation)
+  - DB migration (if needed)
+  - Drizzle schema updates (must mirror migration exactly)
+  - tRPC routers (contract test first, then implementation)
+  - Trigger.dev jobs (if needed)
+  - UI components and pages
+  - Verification steps
+- Commit: `git commit -m "chore: plan for <phase-name>"`
+- Output: `Plan written. Starting implementation next iteration.`
+- Stop here. Implementation begins next iteration.
+
+### If plan EXISTS → IMPLEMENT
+
+Pick the first unchecked item in `tasks/todo.md` and follow the steps below.
+
+---
+
+## STEP 1 — Write failing test first (for any logic or API item)
+
 - Write the test. Run it. Confirm it **FAILS** before writing any implementation.
-- If the test accidentally passes, the implementation already exists — check for stale code.
+- If it passes without implementation — stale code exists. Find and remove it first.
 - Commit the failing test: `git commit -m "test: <behavior>"`
 
-### STEP 3 — Implement
-- Write minimal code to make the test pass.
-- Follow all `CLAUDE.md` conventions:
-  - Files ≤ 400 lines — split before hitting the limit
-  - No async work in request handlers — always Trigger.dev
-  - No inline prompts — `apps/web/src/lib/ai/prompts/` only
-  - Every LLM call inserts into `ai_requests`
-  - Zod schemas in `@learn-x/validators`, never duplicate types
-- Run the test. Iterate until green. Commit: `git commit -m "feat: <what>"`
-- Check the item off in `tasks/todo.md`.
+Config-only files (package.json, tsconfig, migration SQL, next.config) — no test needed.
 
-### STEP 4 — Verification gate (run after ALL items are checked off)
+---
 
-Run every check in order. **Any failure → fix it, restart from STEP 1.**
+## STEP 2 — Implement
 
-```bash
-# 4a — Automated
-pnpm typecheck                # must be zero errors
-pnpm lint                     # must be zero errors
-pnpm test:unit                # must be all green
-supabase start
-pnpm test:contract            # must be all green
-pnpm test:integration         # must be all green
-```
+Write minimal code to make the test pass. Follow all `CLAUDE.md` rules:
 
-```bash
-# 4b — Visual (Playwright MCP)
-# For every user-facing screen changed in this phase:
-# 1. Navigate to the screen
-# 2. Assert correct elements are visible
-# 3. Assert interactions behave correctly
-# 4. Take a screenshot named: screenshots/<phase>/<screen>-<state>.png
-# Do NOT output the promise until all Playwright flows pass.
-```
+- Files ≤ 400 lines — split before hitting the limit
+- No async work in request handlers — always Trigger.dev
+- No inline prompts — `apps/web/src/lib/ai/prompts/` only, versioned `.v1.ts`
+- Every LLM call → row in `ai_requests` — no exceptions
+- Zod schemas in `@learn-x/validators` only — never hand-write duplicate types
+- Read mandatory doc before touching that system — confirm in response
+
+Run the test. Iterate until green.
+Commit: `git commit -m "feat: <what>"`
+Check the item off in `tasks/todo.md`.
+
+Repeat STEP 1 → STEP 2 for each unchecked item.
+
+---
+
+## STEP 3 — Verification gate (only after ALL items are checked off)
+
+Run every check in order. Any failure → fix it, re-run from the top of STEP 3.
+
+### 3a — Automated checks
 
 ```bash
-# 4c — Design cross-check (paper.design)
-# Open paper.design and locate screens for this phase.
-# For each screen, compare: layout, spacing, typography, component variants,
-# color, empty states, loading states, error states.
-# Blocking deviations → fix before promise.
-# Non-blocking deviations → log in tasks/lessons.md with severity note.
+pnpm typecheck        # zero errors required
+pnpm lint             # zero errors required
+pnpm test:unit        # all green required
+pnpm test:contract    # all green required (supabase must be running)
+pnpm test:integration # all green required
 ```
 
-```bash
-# 4d — Architecture rules audit
-# Verify against docs/01-architecture.md:
-# - Rule 1: No async in request handlers
-# - Rule 2: Search only via hybrid_search
-# - Rule 3: No JSONB catch-alls
-# - Rule 4: No hand-written types duplicating schemas
-# - Rule 6: Every LLM call tracked in ai_requests
-# - Rule 7: No file over 400 lines
-# - New tRPC procedures: verb.noun camelCase
-# - New tables with user_id/workspace_id: RLS policies present
-# - Drizzle schema matches migrations exactly
-```
+### 3b — Visual check (Playwright MCP)
 
-### STEP 5 — Done or blocked
+For every user-facing screen added or changed in this phase:
 
-**All checks pass:**
-1. Write phase summary at bottom of `tasks/todo.md`
-2. Update `tasks/lessons.md` with anything that surprised you
-3. `git push origin feat/<phase-name>`
-4. Output exactly: `<promise>PHASE_COMPLETE</promise>`
+1. `browser_tabs select index=0` — navigate to the screen in the running app
+2. Assert correct elements are present and interactive
+3. Test the primary user flow end-to-end
+4. `browser_take_screenshot` → save to `screenshots/<phase-name>/<screen>-<state>.png`
 
-**Iteration limit approaching (≥25 iterations, still not done):**
+Do not output the completion promise until all screens pass.
+
+### 3c — Design cross-check (Paper.design)
+
+For every screen in this phase:
+
+1. `browser_tabs select index=0` — find the screen in LEARN-X design file
+2. Compare: layout, spacing, typography, colors, component variants
+3. Check empty state, loading state, and error state designs
+4. Blocking deviation (wrong layout, missing component) → fix before promise
+5. Minor deviation (slightly off spacing) → log in `tasks/lessons.md` with severity note
+
+For pipeline/architecture changes:
+
+1. `browser_tabs select index=1` — find the relevant diagram in LEARN-X Architecture
+2. Verify implementation matches the architecture diagram
+
+### 3d — Architecture rules audit
+
+Verify against `docs/01-architecture.md` and `CLAUDE.md §The 8 Rules`:
+
+- No async work in tRPC handlers or API routes (must use Trigger.dev)
+- All search goes through `hybrid_search` only
+- No JSONB catch-alls — every entity has its own table
+- No hand-written types that duplicate a Zod schema
+- Every LLM call has a row in `ai_requests`
+- No file over 400 lines
+- New tRPC procedures: `camelCase` verb.noun format
+- Every new table with `user_id` or `workspace_id` has RLS policies
+- Drizzle schema in `schema.ts` exactly mirrors the migration SQL
+
+---
+
+## STEP 4 — Phase complete
+
+When all items checked off and all verification passes:
+
+1. Write phase summary to `tasks/todo.md` under the phase heading
+2. Update `tasks/lessons.md` with anything surprising or worth remembering
+3. Mark the phase complete in `tasks/phases.md`: `[x] phase-name`
+4. Commit: `git commit -m "chore: complete <phase-name>"`
+5. Push: `git push origin main`
+6. Output exactly: `<promise>PHASE_COMPLETE</promise>`
+
+---
+
+## STEP 5 — All phases complete
+
+When `tasks/phases.md` has no unchecked phases remaining:
+
+1. Output exactly: `<promise>ALL_PHASES_COMPLETE</promise>`
+
+---
+
+## STEP 6 — Blocked
+
+When stuck on the same item for 3+ iterations with no progress:
+
 1. Write a blockers section in `tasks/lessons.md`:
-   - What is failing and why
-   - Everything attempted
-   - Suggested next approach
+   - What is failing and exact error
+   - Every approach attempted
+   - Suggested next approach for a human
 2. Output exactly: `<promise>PHASE_BLOCKED</promise>`
 
 ---
 
-## Iteration behaviour
+## Iteration behaviour table
 
-| State | Action |
-|-------|--------|
-| Test failure after fix attempt | Fix and continue — do NOT modify the test |
-| Test failure after 2 fix attempts | `/clear`, re-read failing test, rewrite implementation from scratch |
-| Design deviation (blocking) | Fix, re-run Step 4b |
-| Architecture violation | Fix, re-run Step 4d then restart from 4a |
-| Scope creep discovered | Park in `tasks/todo.md` as a new phase, do NOT expand current phase |
-| Build/typecheck error mid-impl | Fix before committing anything else |
+| Situation                               | Action                                                                  |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| Test fails after fix attempt            | Fix and continue — do NOT modify the test                               |
+| Test fails after 3 fix attempts         | Re-read failing test carefully, rewrite implementation from scratch     |
+| Design deviation — blocking             | Fix implementation, re-run Step 3b+3c                                   |
+| Architecture violation                  | Fix immediately, re-run Step 3d then restart from 3a                    |
+| Scope creep discovered                  | Add to `tasks/todo.md` as a new phase item, do NOT expand current phase |
+| Typecheck/lint error mid-impl           | Fix before committing anything else                                     |
+| Supabase not running for contract tests | Run `supabase start` then retry                                         |
+| Iteration limit approaching (≥ max-3)   | Document progress, output `<promise>PHASE_BLOCKED</promise>`            |
