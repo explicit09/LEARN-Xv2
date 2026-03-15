@@ -77,7 +77,7 @@ export const generateExam = task({
   id: 'generate-exam',
   run: async (payload: GenerateExamPayload) => {
     const supabase = makeSupabase()
-    const { workspaceId, userId, lessonId } = payload
+    const { workspaceId, userId, lessonId: _lessonId } = payload
 
     // Fetch workspace
     const { data: workspace } = await supabase

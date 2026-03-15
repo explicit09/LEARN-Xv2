@@ -4,6 +4,28 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@learn-x/utils'
 import { createClient } from '@/lib/supabase/client'
+import { trpc } from '@/lib/trpc/client'
+
+function DueCount() {
+  const { data } = trpc.notification.getDailyDigest.useQuery(
+    {},
+    {
+      staleTime: 60_000,
+    },
+  )
+  const dueFlashcards = data?.dueFlashcards ?? 0
+  const fadingCount = data?.fadingConcepts?.length ?? 0
+  const total = dueFlashcards + fadingCount
+  if (!total) return null
+  return (
+    <span
+      className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-white tabular-nums"
+      aria-label={`${total} items due`}
+    >
+      {total > 99 ? '99+' : total}
+    </span>
+  )
+}
 
 const NAV_ITEMS = [
   {
@@ -100,6 +122,7 @@ export function Sidebar() {
           <Link
             key={item.href}
             href={item.href}
+            aria-current={pathname === item.href ? 'page' : undefined}
             className={cn(
               'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
               pathname === item.href || pathname.startsWith(item.href + '/')
@@ -109,6 +132,7 @@ export function Sidebar() {
           >
             {item.icon}
             {item.label}
+            {item.href === '/study' && <DueCount />}
           </Link>
         ))}
       </nav>

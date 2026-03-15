@@ -60,3 +60,9 @@ export {
   generateExamSchema,
   shareExamSchema,
 } from './exam'
+export {
+  createCourseSchema,
+  joinCourseSchema,
+  addDocumentSchema,
+  updateCourseSchema,
+} from './course'

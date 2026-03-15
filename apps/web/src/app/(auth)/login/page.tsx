@@ -28,8 +28,8 @@ export default function LoginPage() {
           {/* Testimonial */}
           <div className="rounded-xl border border-[hsl(215,35%,18%)] bg-[hsl(222,38%,11%)] p-5 space-y-3">
             <p className="text-sm text-[hsl(214,32%,75%)] leading-relaxed">
-              "I uploaded my entire ML textbook and had a personalized study plan in minutes. The
-              FSRS scheduling actually keeps me on track."
+              &ldquo;I uploaded my entire ML textbook and had a personalized study plan in minutes.
+              The FSRS scheduling actually keeps me on track.&rdquo;
             </p>
             <div className="flex items-center gap-3">
               <div className="h-8 w-8 rounded-full bg-[hsl(221,83%,53%)] flex items-center justify-center text-xs font-semibold text-white">

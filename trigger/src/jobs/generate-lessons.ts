@@ -178,7 +178,7 @@ export const generateLessons = task({
 
       const prerequisites = orderedConcepts
         .slice(0, i)
-        .filter((prereq, idx) =>
+        .filter((_prereq, idx) =>
           (relations ?? []).some(
             (r) =>
               r.source_concept_id === orderedConcepts[idx]?.id &&

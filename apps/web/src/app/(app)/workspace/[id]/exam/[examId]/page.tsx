@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useState, useCallback } from 'react'
+import { use, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc/client'
 import { ExamTimer } from '@/components/exam/ExamTimer'
@@ -152,12 +152,6 @@ function ExamRunner({ workspaceId, examId }: { workspaceId: string; examId: stri
     startMutation.mutate({ examId, workspaceId })
   }
 
-  const handleTimeUp = useCallback(() => {
-    if (state.phase !== 'taking') return
-    // Auto-submit all current answers
-    handleCompleteExam(state.attemptId, state.questions)
-  }, [state])
-
   async function handleCompleteExam(attemptId: string, questions: Question[]) {
     setState({ phase: 'submitting' })
     // Submit any unsaved answers
@@ -174,6 +168,11 @@ function ExamRunner({ workspaceId, examId }: { workspaceId: string; examId: stri
       )
     await Promise.all(savePromises)
     completeMutation.mutate({ attemptId, workspaceId })
+  }
+
+  function handleTimeUp() {
+    if (state.phase !== 'taking') return
+    void handleCompleteExam(state.attemptId, state.questions)
   }
 
   if (!hasStarted) {

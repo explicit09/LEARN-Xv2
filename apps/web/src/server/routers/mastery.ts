@@ -80,6 +80,45 @@ export const masteryRouter = createTRPCRouter({
       }>
     }),
 
+  /**
+   * Trigger remediation job for a weak concept, returns lessonId when ready.
+   */
+  getRemediationPath: protectedProcedure
+    .input(workspaceInput.extend({ conceptId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+      await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
+
+      const { data: job, error: jobError } = await ctx.supabase
+        .from('jobs')
+        .insert({
+          workspace_id: input.workspaceId,
+          user_id: userId,
+          type: 'generate_remediation',
+          status: 'pending',
+          progress: 0,
+          metadata: { conceptId: input.conceptId },
+        })
+        .select('id')
+        .single()
+
+      if (jobError) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' })
+
+      try {
+        const { generateRemediation } =
+          await import('@/../../../trigger/src/jobs/generate-remediation')
+        await generateRemediation.trigger({
+          workspaceId: input.workspaceId,
+          conceptId: input.conceptId,
+          userId,
+        })
+      } catch {
+        // TRIGGER_SECRET_KEY not set in dev/test
+      }
+
+      return { jobId: job!.id as string, status: 'queued' as const }
+    }),
+
   getWhatToStudyNext: protectedProcedure.input(workspaceInput).query(async ({ ctx, input }) => {
     const userId = await resolveUserId(ctx.supabase, ctx.user.id)
     await resolveWorkspace(ctx.supabase, input.workspaceId, userId)

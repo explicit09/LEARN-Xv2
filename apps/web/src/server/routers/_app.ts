@@ -1,5 +1,9 @@
 import { createTRPCRouter } from '../trpc'
+import { audioRecapRouter } from './audioRecap'
 import { chatRouter } from './chat'
+import { courseRouter } from './course'
+import { notificationRouter } from './notification'
+import { studyPlanRouter } from './studyPlan'
 import { conceptRouter } from './concept'
 import { documentRouter } from './document'
 import { examRouter } from './exam'
@@ -23,6 +27,10 @@ export const appRouter = createTRPCRouter({
   flashcard: flashcardRouter,
   mastery: masteryRouter,
   exam: examRouter,
+  audioRecap: audioRecapRouter,
+  studyPlan: studyPlanRouter,
+  notification: notificationRouter,
+  course: courseRouter,
 })
 
 export type AppRouter = typeof appRouter

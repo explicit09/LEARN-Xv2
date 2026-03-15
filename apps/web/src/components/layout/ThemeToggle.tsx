@@ -5,12 +5,10 @@ import { useEffect, useState } from 'react'
 type Theme = 'system' | 'light' | 'dark'
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>('system')
-
-  useEffect(() => {
-    const stored = localStorage.getItem('learn-x-theme') as Theme | null
-    if (stored) setTheme(stored)
-  }, [])
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return 'system'
+    return (localStorage.getItem('learn-x-theme') as Theme | null) ?? 'system'
+  })
 
   function apply(next: Theme) {
     setTheme(next)
