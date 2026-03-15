@@ -12,4 +12,4 @@ to find the next phase to implement. Never reorder completed phases.
 - [x] phase-1D-lesson-generation
 - [x] phase-1E-grounded-chat
 - [x] phase-1F-quizzes-flashcards
-- [ ] phase-1G-mastery-dashboard
+- [x] phase-1G-mastery-dashboard

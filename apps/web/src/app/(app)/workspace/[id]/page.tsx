@@ -5,6 +5,7 @@ import { WorkspaceDocuments } from '@/components/document/WorkspaceDocuments'
 import { ConceptList } from '@/components/concept/ConceptList'
 import { LessonList } from '@/components/lesson/LessonList'
 import { SyllabusView } from '@/components/syllabus/SyllabusView'
+import { MasteryDashboard } from '@/components/mastery/MasteryDashboard'
 import { createServerCaller } from '@/lib/trpc/server'
 
 interface WorkspacePageProps {
@@ -20,6 +21,7 @@ const TABS = [
   { key: 'chat', label: 'Chat' },
   { key: 'quiz', label: 'Quizzes' },
   { key: 'flashcards', label: 'Flashcards' },
+  { key: 'mastery', label: 'Mastery' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -105,6 +107,7 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
             </Link>
           </div>
         )}
+        {activeTab === 'mastery' && <MasteryDashboard workspaceId={id} />}
       </div>
     </>
   )

@@ -486,3 +486,18 @@ Complete. Quizzes + Flashcards with FSRS spaced-repetition implemented.
 - Quiz + Flashcard tabs on workspace page
 - 72 contract tests passing, all 8 test files green
 - Schema split: schema-practice.ts (7 tables) to stay under 400-line limit
+
+---
+
+## Task: Phase 1G — Mastery Dashboard
+
+### Phase 1G Summary
+
+Complete. Mastery Dashboard implemented.
+
+- 2 new RPC functions: get_workspace_mastery_summary, get_weak_concepts
+- tRPC router: mastery (getWorkspaceSummary/getWeakConcepts/getWhatToStudyNext)
+- RPC functions use SECURITY DEFINER without auth.uid() — router handles authorization (lesson: test env auth.uid() is NULL)
+- UI: MasteryDashboard with stats grid, "What to study next", struggling concepts with stability progress bars
+- Mastery tab added to workspace page
+- 78 contract tests passing across 9 test files
