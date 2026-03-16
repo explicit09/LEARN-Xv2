@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss'
 
 export const baseConfig: Omit<Config, 'content'> = {
+  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {

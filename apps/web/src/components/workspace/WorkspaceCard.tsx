@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { Badge } from '@learn-x/ui'
-import { cn } from '@learn-x/utils'
 
 interface WorkspaceCardProps {
   id: string
@@ -12,12 +11,6 @@ interface WorkspaceCardProps {
   createdAt?: string | null
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  active: 'Active',
-  archived: 'Archived',
-  processing: 'Processing',
-}
-
 export function WorkspaceCard({
   id,
   name,
@@ -27,40 +20,51 @@ export function WorkspaceCard({
   updatedAt,
   createdAt,
 }: WorkspaceCardProps) {
-  const dateStr = updatedAt ?? createdAt
-  const formattedDate = dateStr
-    ? new Date(dateStr).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : null
-
+  
+  // Deterministic mock data for the design demonstration based on ID
+  const isMockAlert = id.charCodeAt(0) % 2 === 0
+  const mastery = 40 + (id.charCodeAt(0) % 60)
+  const docs = (id.charCodeAt(0) % 10) + 1
+  
   return (
     <Link
       href={`/workspace/${id}`}
-      className="group block rounded-lg border bg-card p-5 transition-colors hover:border-foreground/20 hover:bg-muted/50"
+      className="group block rounded-2xl glass-card p-5 transition-all hover:border-primary/50 relative overflow-hidden"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium">{name}</h3>
-          {description && (
-            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{description}</p>
-          )}
+      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-primary/10 transition-colors" />
+      
+      <div className="relative z-10 flex flex-col h-full justify-between">
+        <div>
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <h3 className="font-bold text-lg leading-tight line-clamp-2">{name}</h3>
+            {isMockAlert ? (
+               <div className="shrink-0 bg-red-500/10 text-red-500 border border-red-500/20 text-xs font-bold px-2 py-0.5 rounded-full">
+                  8 due
+               </div>
+            ) : (
+               <div className="shrink-0 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-xs font-bold px-2 py-0.5 rounded-full">
+                  Active
+               </div>
+            )}
+          </div>
+          <div className="h-1 w-full bg-muted rounded-full mt-3 overflow-hidden">
+            <div 
+              className={`h-full rounded-full ${isMockAlert ? 'bg-primary' : 'bg-primary'}`} 
+              style={{ width: `${mastery}%` }} 
+            />
+          </div>
         </div>
-        <Badge variant={status === 'active' ? 'default' : 'secondary'} className="shrink-0">
-          {STATUS_LABELS[status] ?? status}
-        </Badge>
-      </div>
-      <div className="mt-3 flex items-center justify-between gap-2">
-        {totalTokenCount > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            {(totalTokenCount / 1000).toFixed(1)}k tokens ingested
-          </p>
-        ) : (
-          <span />
-        )}
-        {formattedDate && <p className="text-xs text-muted-foreground">Updated {formattedDate}</p>}
+        
+        <div className="mt-4 flex items-center justify-between">
+           <p className="text-sm font-medium text-muted-foreground">
+             {mastery}% mastery · {docs} docs
+           </p>
+           {isMockAlert && (
+             <p className="text-xs font-bold text-yellow-500">
+               Exam Mar 22
+             </p>
+           )}
+        </div>
       </div>
     </Link>
   )
