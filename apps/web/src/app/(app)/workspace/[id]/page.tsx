@@ -5,6 +5,7 @@ import { WorkspaceDocuments } from '@/components/document/WorkspaceDocuments'
 import { ConceptList } from '@/components/concept/ConceptList'
 import { LessonList } from '@/components/lesson/LessonList'
 import { SyllabusView } from '@/components/syllabus/SyllabusView'
+import { MasteryDashboard } from '@/components/mastery/MasteryDashboard'
 import { createServerCaller } from '@/lib/trpc/server'
 
 interface WorkspacePageProps {
@@ -18,6 +19,11 @@ const TABS = [
   { key: 'syllabus', label: 'Syllabus' },
   { key: 'lessons', label: 'Lessons' },
   { key: 'chat', label: 'Chat' },
+  { key: 'quiz', label: 'Quizzes' },
+  { key: 'flashcards', label: 'Flashcards' },
+  { key: 'mastery', label: 'Mastery' },
+  { key: 'exam', label: 'Exams' },
+  { key: 'graph', label: 'Graph' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -76,6 +82,57 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
               className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
             >
               Open Chat
+            </Link>
+          </div>
+        )}
+        {activeTab === 'quiz' && (
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">Test your knowledge with quizzes</p>
+            <Link
+              href={`/workspace/${id}/quiz`}
+              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
+            >
+              View Quizzes
+            </Link>
+          </div>
+        )}
+        {activeTab === 'flashcards' && (
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              Review with spaced-repetition flashcards
+            </p>
+            <Link
+              href={`/workspace/${id}/flashcards`}
+              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
+            >
+              Start Review
+            </Link>
+          </div>
+        )}
+        {activeTab === 'mastery' && <MasteryDashboard workspaceId={id} />}
+        {activeTab === 'exam' && (
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              Formal timed exams with Bloom&apos;s-tagged questions
+            </p>
+            <Link
+              href={`/workspace/${id}/exam`}
+              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
+            >
+              View Exams
+            </Link>
+          </div>
+        )}
+        {activeTab === 'graph' && (
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <p className="text-sm text-muted-foreground">
+              Force-directed map of all concepts and their relationships
+            </p>
+            <Link
+              href={`/workspace/${id}/graph`}
+              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
+            >
+              Open Knowledge Graph
             </Link>
           </div>
         )}

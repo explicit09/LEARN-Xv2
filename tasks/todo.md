@@ -375,3 +375,381 @@ Phase 1C complete with corrections. 8 DB tables + RLS deployed via migrations 00
 - 4 tRPC procedures (all use `ctx.supabase` not drizzle — direct PG port not reachable in this env)
 - 5 chat UI components + session detail page
 - **Lesson learned:** All tRPC routers must use `ctx.supabase` (Supabase JS client), not drizzle directly. Direct PostgreSQL port (5432) to `db.[project].supabase.co` is unreachable; only the REST API port works.
+
+---
+
+## Phase 1F — Quizzes + Flashcards
+
+**Branch:** feat/phase-1F-quizzes-flashcards
+
+### Docs read (mandatory before coding)
+
+- [x] `docs/03-database.md` — quizzes, quiz_questions, quiz_attempts, quiz_responses, flashcard_sets, flashcards, flashcard_reviews schema + get_due_flashcards RPC
+- [x] `docs/07-ai-pipeline.md` — MODEL_ROUTES.FAST_GENERATION (gemini-2.0-flash-lite for quizzes/flashcards), ai_requests Rule 6
+- [x] `docs/12-personalization-engine.md` — persona context for quiz difficulty + flashcard domain
+
+### Plan
+
+#### Step 1 — Validator tests (FAILING first) → implement
+
+- [ ] `packages/validators/src/__tests__/quiz.test.ts`:
+  - `createQuizSchema` validates workspaceId uuid, optional lessonId uuid, quizType enum
+  - `submitResponseSchema` validates attemptId uuid, questionId uuid, userAnswer string
+  - rejects invalid enum values
+- [ ] `packages/validators/src/__tests__/flashcard.test.ts`:
+  - `createFlashcardSetSchema` validates workspaceId uuid, title string, sourceType enum
+  - `submitReviewSchema` validates cardId uuid, rating 1-4 integer
+- [ ] `packages/validators/src/quiz.ts` — createQuizSchema, getQuizSchema, startAttemptSchema, submitResponseSchema, completeAttemptSchema, triggerGenerateQuizSchema
+- [ ] `packages/validators/src/flashcard.ts` — createFlashcardSetSchema, getFlashcardSetSchema, getDueFlashcardsSchema, submitReviewSchema, triggerGenerateFlashcardsSchema
+- [ ] `packages/validators/src/index.ts` — export quiz + flashcard schemas
+
+#### Step 2 — Database migration
+
+- [ ] `supabase/migrations/0007_phase1f_practice.sql`:
+  - `quizzes`: id, workspace_id, lesson_id nullable, user_id, title, quiz_type CHECK IN ('practice','review','exam_prep','diagnostic'), difficulty_level, created_at
+  - `quiz_questions`: id, quiz_id, question_type CHECK IN ('mcq','short_answer','fill_blank','true_false'), bloom_level, question_text, options JSONB, correct_answer, explanation, concept_id nullable, order_index, created_at
+  - `quiz_attempts`: id, quiz_id, user_id, score REAL, time_spent_seconds, completed_at, created_at
+  - `quiz_responses`: id, attempt_id, question_id, user_answer, is_correct, ai_feedback, created_at
+  - `flashcard_sets`: id, workspace_id, user_id, title, source_type CHECK IN ('lesson','workspace','manual'), source_id, card_count, created_at
+  - `flashcards`: id, set_id, user_id, front, back, concept_id nullable, fsrs_stability REAL DEFAULT 0, fsrs_difficulty REAL DEFAULT 0, fsrs_elapsed_days INT DEFAULT 0, fsrs_scheduled_days INT DEFAULT 0, fsrs_reps INT DEFAULT 0, fsrs_lapses INT DEFAULT 0, fsrs_state TEXT CHECK IN ('new','learning','review','relearning') DEFAULT 'new', next_review_at TIMESTAMPTZ, last_review_at TIMESTAMPTZ, created_at
+  - `flashcard_reviews`: id, card_id, user_id, rating INT CHECK BETWEEN 1 AND 4, review_duration_ms, created_at
+  - Indexes: idx_flashcards_due (partial, where fsrs_state != 'new'), all FK indexes
+  - RLS on all 7 tables (workspace/user-scoped)
+  - `get_due_flashcards(p_user_id UUID, p_limit INT DEFAULT 20)` RPC function
+- [ ] Apply migration via Supabase MCP
+
+#### Step 3 — Prompt files
+
+- [ ] `apps/web/src/lib/ai/prompts/quiz-generation.v1.ts`:
+  - `buildQuizPrompt(params: { conceptNames: string[], retrievedChunks: string[], lessonTitle?: string, questionCount?: number, bloomLevels?: string[] }): string`
+  - `QUIZ_PROMPT_VERSION = 'quiz-generation.v1'`
+  - Uses Gemini Flash-Lite (FAST_GENERATION)
+- [ ] `apps/web/src/lib/ai/prompts/flashcard-generation.v1.ts`:
+  - `buildFlashcardPrompt(params: { conceptNames: string[], retrievedChunks: string[], count?: number }): string`
+  - `FLASHCARD_PROMPT_VERSION = 'flashcard-generation.v1'`
+
+#### Step 4 — Trigger.dev jobs
+
+- [ ] `trigger/src/jobs/generate-quiz.ts`:
+  - id: 'generate-quiz', payload: `{ workspaceId, lessonId?, userId }`
+  - Fetch concepts for lesson or workspace → hybrid_search chunks per concept → call generateObject (gemini-2.0-flash-lite) → record ai_request → insert quiz + quiz_questions
+- [ ] `trigger/src/jobs/generate-flashcards.ts`:
+  - id: 'generate-flashcards', payload: `{ workspaceId, lessonId?, userId, setId }`
+  - Fetch lesson chunks or workspace chunks → call generateObject (gemini-2.0-flash-lite) → record ai_request → insert flashcards into set, update card_count
+- [ ] Copy prompt files to `trigger/src/lib/prompts/` (same as 1D pattern — no cross-package import)
+
+#### Step 5 — tRPC contract tests (FAILING first) → implement
+
+- [ ] `apps/web/src/server/routers/__tests__/quiz.contract.test.ts`:
+  - `quiz.get` — UNAUTHORIZED; NOT_FOUND; returns quiz with questions
+  - `quiz.startAttempt` — UNAUTHORIZED; creates attempt row; returns attempt with questions
+  - `quiz.submitResponse` — UNAUTHORIZED; records response, returns is_correct
+  - `quiz.completeAttempt` — UNAUTHORIZED; sets score + completed_at
+  - `quiz.triggerGenerate` — UNAUTHORIZED; returns queued status
+- [ ] `apps/web/src/server/routers/__tests__/flashcard.contract.test.ts`:
+  - `flashcard.getDue` — UNAUTHORIZED; returns [] when no due cards; returns due cards
+  - `flashcard.submitReview` — UNAUTHORIZED; updates FSRS state fields; inserts review row
+  - `flashcard.triggerGenerate` — UNAUTHORIZED; returns queued status
+- [ ] `apps/web/src/server/routers/quiz.ts` — all procedures using ctx.supabase
+- [ ] `apps/web/src/server/routers/flashcard.ts` — all procedures using ctx.supabase; submitReview runs ts-fsrs to compute next state
+- [ ] `apps/web/src/server/routers/_app.ts` — merge quizRouter + flashcardRouter
+
+#### Step 6 — UI components
+
+- [ ] `apps/web/src/components/quiz/QuizQuestion.tsx` — single question with MCQ options or text input; immediate feedback after answer
+- [ ] `apps/web/src/components/quiz/QuizRunner.tsx` (client) — trpc.quiz.startAttempt.useMutation, steps through questions, submits responses, shows score at end
+- [ ] `apps/web/src/components/quiz/QuizList.tsx` (client) — list quizzes in workspace + "Generate Quiz" button
+- [ ] `apps/web/src/components/flashcard/FlashcardCard.tsx` — flip animation (front/back), rating buttons (Again/Hard/Good/Easy)
+- [ ] `apps/web/src/components/flashcard/FlashcardReview.tsx` (client) — trpc.flashcard.getDue.useQuery, steps through due cards, submitReview mutation
+- [ ] `apps/web/src/app/(app)/workspace/[id]/quiz/[quizId]/page.tsx` — quiz detail with QuizRunner
+- [ ] `apps/web/src/app/(app)/workspace/[id]/flashcards/page.tsx` — flashcard review with FlashcardReview
+- [ ] Update `apps/web/src/app/(app)/workspace/[id]/page.tsx` — add Quiz + Flashcards tabs
+
+### Verification
+
+- [ ] `pnpm test:unit` — quiz/flashcard validator tests pass + all prior tests pass
+- [ ] `pnpm --filter web test:contract` — quiz/flashcard procedures pass + all prior procedures pass
+- [ ] `pnpm typecheck` — all packages clean
+- [ ] `pnpm lint` — zero errors
+
+### Phase 1F Summary
+
+Complete. Quizzes + Flashcards with FSRS spaced-repetition implemented.
+
+- 7 new tables: quizzes, quiz_questions, quiz_attempts, quiz_responses, flashcard_sets, flashcards, flashcard_reviews
+- `get_due_flashcards` RPC function with SECURITY DEFINER
+- Validators: createQuizSchema, submitReviewSchema (rating 1-4), etc. — 130 unit tests passing
+- tRPC routers: quiz (list/get/startAttempt/submitResponse/completeAttempt) + flashcard (listSets/getSet/getDue/submitReview)
+- FSRS via `@learn-x/utils` rateCard() in submitReview
+- Trigger.dev jobs: generate-quiz, generate-flashcards (gpt-4o-mini)
+- UI: QuizRunner, QuizList, FlashcardCard, FlashcardReview, FlashcardSetList
+- Quiz + Flashcard tabs on workspace page
+- 72 contract tests passing, all 8 test files green
+- Schema split: schema-practice.ts (7 tables) to stay under 400-line limit
+
+---
+
+## Task: Phase 1G — Mastery Dashboard
+
+### Phase 1G Summary
+
+Complete. Mastery Dashboard implemented.
+
+- 2 new RPC functions: get_workspace_mastery_summary, get_weak_concepts
+- tRPC router: mastery (getWorkspaceSummary/getWeakConcepts/getWhatToStudyNext)
+- RPC functions use SECURITY DEFINER without auth.uid() — router handles authorization (lesson: test env auth.uid() is NULL)
+- UI: MasteryDashboard with stats grid, "What to study next", struggling concepts with stability progress bars
+- Mastery tab added to workspace page
+- 78 contract tests passing across 9 test files
+
+---
+
+## Phase 2: Retention + Institutional Foundation
+
+**Branch:** feat/phase-2-retention-institutional
+**Goal:** Exam system, audio recaps, daily study plans, remediation paths, instructor tools.
+
+### 2A — Exam System
+
+#### Migration
+
+- [ ] `supabase/migrations/0009_phase2a_exams.sql` — exams, exam_questions, exam_attempts, exam_responses tables + RLS + join_token unique index
+- [ ] Apply via Supabase MCP (project_id: yluryjcvohdjvgdmeatk)
+
+#### Validators (test-first)
+
+- [ ] `packages/validators/src/__tests__/exam.test.ts` — failing tests for all exam schemas
+- [ ] `packages/validators/src/exam.ts` — examStatusEnum, questionTypeEnum, bloomLevelEnum, createExamSchema, startExamSchema, submitResponseSchema, completeExamSchema, joinExamSchema
+- [ ] `packages/validators/src/index.ts` — export exam schemas
+
+#### Trigger.dev job
+
+- [ ] `trigger/src/jobs/generate-exam.ts` — fetch concepts + chunks → gpt-4o-mini generateObject → insert exams + exam_questions → ai_requests row
+  - Bloom's distribution: 30% remember/understand, 40% apply/analyze, 30% evaluate/create
+  - Min 10 questions, 2-3 per concept
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/exam.contract.test.ts` — UNAUTHORIZED, list returns [], generate returns jobId, start returns attempt + questions, complete returns score
+- [ ] `apps/web/src/server/routers/exam.ts` — list, get, generate, start, submitResponse, complete, share, joinByToken
+- [ ] `apps/web/src/server/routers/_app.ts` — add exam: examRouter
+
+#### UI
+
+- [ ] `apps/web/src/app/(app)/workspace/[id]/exam/page.tsx` — exam list + Generate button
+- [ ] `apps/web/src/app/(app)/workspace/[id]/exam/[examId]/page.tsx` — timed exam taking UI (countdown, one question at a time, MCQ/short_answer/true_false/fill_blank, auto-submit on timer)
+- [ ] `apps/web/src/app/(app)/workspace/[id]/exam/[examId]/score/page.tsx` — score screen with letter grade, per-question review, Retake + Back buttons
+- [ ] `apps/web/src/components/exam/ExamTimer.tsx` — countdown timer component
+- [ ] Update workspace page — add Exams tab
+
+### 2B — Audio Recaps
+
+#### Migration
+
+- [ ] `supabase/migrations/0010_phase2b_audio.sql` — audio_recaps table + RLS
+- [ ] Apply via Supabase MCP
+
+#### Trigger.dev job
+
+- [ ] `trigger/src/jobs/generate-audio-recap.ts` — fetch lesson sections → LLM dialogue script → ElevenLabs TTS → Supabase Storage → insert audio_recaps row
+  - If no ELEVENLABS_API_KEY: store placeholder MP3
+  - Voices: Rachel (Host A), Antoni (Host B)
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/audioRecap.contract.test.ts`
+- [ ] `apps/web/src/server/routers/audioRecap.ts` — get, generate, list
+- [ ] `apps/web/src/server/routers/_app.ts` — add audioRecap: audioRecapRouter
+
+#### UI
+
+- [ ] `apps/web/src/components/lesson/AudioRecapPlayer.tsx` — play/pause, scrubber, time, Generate button + Generating skeleton
+- [ ] Add AudioRecapPlayer to LessonReader component
+
+### 2C — Daily Study Plans + Exam Prep
+
+#### Migration
+
+- [ ] `supabase/migrations/0011_phase2c_studyplans.sql` — study_plans table + RLS
+- [ ] Apply via Supabase MCP
+
+#### Trigger.dev job
+
+- [ ] `trigger/src/jobs/generate-study-plan.ts` — mastery summary + due flashcards + incomplete lessons → prioritized plan (max 5 items) → readiness_score → upsert study_plans
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/studyPlan.contract.test.ts`
+- [ ] `apps/web/src/server/routers/studyPlan.ts` — getToday, setExamDate, getReadinessScore, markItemComplete
+- [ ] `apps/web/src/server/routers/_app.ts` — add studyPlan: studyPlanRouter
+
+#### UI
+
+- [ ] `apps/web/src/app/(app)/study/page.tsx` — Study Queue: ordered task list, readiness score meter, exam countdown
+- [ ] `apps/web/src/components/workspace/ExamPrepBanner.tsx` — banner in workspace when exam date set
+
+### 2D — Remediation + Notifications
+
+#### Trigger.dev job
+
+- [ ] `trigger/src/jobs/generate-remediation.ts` — concept weakness data → hybrid_search chunks → mini-lesson (500-800 words) + 3 practice questions via LLM → insert lessons (type='remediation') → ai_requests row
+
+#### tRPC procedures (add to existing routers)
+
+- [ ] `mastery.getRemediationPath(workspaceId, conceptId)` — trigger remediation job, return lessonId
+- [ ] `notification.getDailyDigest(workspaceId?)` — { dueFlashcards, fadingConcepts, studyStreakDays }
+- [ ] `apps/web/src/server/routers/notification.ts` — new router
+- [ ] `apps/web/src/server/routers/_app.ts` — add notification: notificationRouter
+
+#### UI
+
+- [ ] `apps/web/src/components/mastery/RemediationButton.tsx` — "Fix now" button on struggling concepts
+- [ ] Notification badge in Sidebar (due count from getDailyDigest)
+
+### 2E — Professor/Instructor Tools
+
+#### Migration
+
+- [ ] `supabase/migrations/0012_phase2e_instructor.sql` — instructor_profiles, courses, course_enrollments, course_documents + RLS + join_code generation
+- [ ] Apply via Supabase MCP
+
+#### Validators (test-first)
+
+- [ ] `packages/validators/src/__tests__/course.test.ts` — failing tests for course schemas
+- [ ] `packages/validators/src/course.ts` — createCourseSchema, joinCourseSchema, addDocumentSchema
+- [ ] `packages/validators/src/index.ts` — export course schemas
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/course.contract.test.ts` — UNAUTHORIZED, create, list, get, join
+- [ ] `apps/web/src/server/routers/course.ts` — create, list, get, addDocument, removeDocument, inviteStudent, join, getConfusionAnalytics, getAtRiskStudents
+- [ ] `apps/web/src/server/routers/_app.ts` — add course: courseRouter
+
+#### UI
+
+- [ ] `apps/web/src/app/(app)/instructor/page.tsx` — instructor dashboard: course list with student count + avg mastery, Create course button
+- [ ] `apps/web/src/app/(app)/instructor/[courseId]/page.tsx` — course detail: student roster + mastery table, concept confusion heatmap, join code, document list
+- [ ] `apps/web/src/app/(app)/instructor/[courseId]/join/page.tsx` — student join page via code
+
+### Phase 2 Verification Gate
+
+- [ ] `pnpm typecheck` — zero errors
+- [ ] `pnpm lint` — zero errors
+- [ ] `pnpm test:unit` — all green
+- [ ] `pnpm --filter web test:contract` — all green
+- [x] Playwright: /workspace/[id]/exam → Generate Exam → exam appears
+- [x] Playwright: /workspace/[id]/exam/[id] → take exam → score screen
+- [x] Playwright: /study → plan renders
+- [x] Playwright: /instructor → page loads (empty state)
+- [x] Architecture audit: no async in handlers, all LLM calls tracked, no files over 400 lines
+- [ ] `git push origin feat/phase-2-retention-institutional`
+- [ ] Mark [x] phase-2-retention-institutional in tasks/phases.md
+
+---
+
+## Phase 3 — Platform Expansion
+
+### 3A — Cross-Workspace Knowledge Graph
+
+**Goal:** Tag every concept with a canonical domain slug (e.g. `ml:gradient-descent`). Surface a global knowledge graph view for power users.
+
+#### Migration
+
+- [ ] `supabase/migrations/0013_phase3a_concept_tags.sql` — `concept_tags` (concept_id, tag, domain), `concept_relations_global` (source_canonical, target_canonical, relation_type)
+- [ ] Apply via Supabase MCP
+
+#### Validators (test-first)
+
+- [ ] `packages/validators/src/__tests__/knowledgeGraph.test.ts` — failing tests for tagConceptSchema, getGraphSchema
+- [ ] `packages/validators/src/knowledgeGraph.ts` — tagConceptSchema, getGraphSchema
+- [ ] `packages/validators/src/index.ts` — export new schemas
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/knowledgeGraph.contract.test.ts` — UNAUTHORIZED, tagConcept, getGraph returns nodes+edges
+- [ ] `apps/web/src/server/routers/knowledgeGraph.ts` — tagConcept, getGraph (aggregate from mastery_records across workspaces)
+- [ ] `apps/web/src/server/routers/_app.ts` — add knowledgeGraph: knowledgeGraphRouter
+
+#### UI
+
+- [ ] `apps/web/src/app/(app)/workspace/[id]/graph/page.tsx` — Force-directed SVG graph (D3-lite, no external dep), node color = mastery %, edge = prerequisite
+- [ ] `apps/web/src/app/(app)/workspace/[id]/page.tsx` — add 'graph' tab
+
+---
+
+### 3B — Collaborative Study Rooms
+
+**Goal:** Students in the same course can enter a live study room, see each other's real-time confusion flags, and co-trigger a shared AI Q&A session.
+
+#### Migration
+
+- [ ] `supabase/migrations/0014_phase3b_study_rooms.sql` — `study_rooms` (id, course_id, host_user_id, status, created_at), `study_room_members` (room_id, user_id, joined_at), `study_room_messages` (room_id, user_id, content, created_at)
+- [ ] Apply via Supabase MCP
+- [ ] Enable Supabase Realtime on study_room_members and study_room_messages
+
+#### Validators (test-first)
+
+- [ ] `packages/validators/src/__tests__/studyRoom.test.ts` — failing tests for createRoomSchema, joinRoomSchema, sendMessageSchema
+- [ ] `packages/validators/src/studyRoom.ts` — createRoomSchema, joinRoomSchema, sendMessageSchema
+- [ ] `packages/validators/src/index.ts` — export new schemas
+
+#### tRPC router (contract tests first)
+
+- [ ] `apps/web/src/server/routers/__tests__/studyRoom.contract.test.ts` — UNAUTHORIZED, create returns roomId, join NOT_FOUND for bad room, list returns []
+- [ ] `apps/web/src/server/routers/studyRoom.ts` — create, join, leave, list (open rooms for course), sendMessage, getMessages
+- [ ] `apps/web/src/server/routers/_app.ts` — add studyRoom: studyRoomRouter
+
+#### UI
+
+- [ ] `apps/web/src/app/(app)/study-room/[roomId]/page.tsx` — real-time member list (Supabase Realtime), chat panel, "Ask AI" button → shared chat session
+- [ ] `apps/web/src/app/(app)/instructor/[courseId]/page.tsx` — "Open study room" button
+
+---
+
+### 3C — Accessibility + Admin
+
+**Goal:** Full keyboard navigation, screen reader support (ARIA), admin panel for usage metrics.
+
+#### Accessibility audit + fixes
+
+- [ ] Run axe audit via Playwright on /dashboard, /workspace/[id], /study, /instructor
+- [ ] Fix all critical + serious violations (role attributes, focus management, contrast)
+- [ ] `apps/web/src/components/layout/SkipLink.tsx` — "Skip to content" link
+- [ ] Add `aria-label` / `aria-describedby` to all interactive elements missing them
+- [ ] Keyboard focus trap in all modals (CreateCourseModal, etc.)
+
+#### Admin panel (protected route, role=admin RLS)
+
+- [ ] `supabase/migrations/0015_phase3c_admin.sql` — `user_roles` (user_id, role ENUM['user','admin']), RLS for admin-only queries
+- [ ] `apps/web/src/server/routers/admin.ts` — getUsageStats (total users, workspaces, documents, AI requests in last 30d), listUsers
+- [ ] `apps/web/src/app/(app)/admin/page.tsx` — metrics dashboard: user count, doc count, AI request count, top workspaces
+
+---
+
+### 3D — Offline Mode (PWA)
+
+**Goal:** Cache last-accessed workspace + due flashcards for offline use. Sync when reconnected.
+
+#### PWA setup
+
+- [ ] Add `next-pwa` or `serwist` to web app
+- [ ] `apps/web/public/manifest.json` — PWA manifest (name, icons, theme_color)
+- [ ] Service worker: cache /dashboard, /workspace/[id] shell, flashcard review assets
+- [ ] `apps/web/src/components/layout/OfflineBanner.tsx` — "You're offline — showing cached data" banner
+- [ ] Background sync: queue flashcard reviews when offline, flush on reconnect
+
+---
+
+### Phase 3 Verification Gate
+
+- [ ] `pnpm typecheck` — zero errors
+- [ ] `pnpm lint` — zero errors
+- [ ] `pnpm test:unit` — all green
+- [ ] `pnpm --filter web test:contract` — all green
+- [ ] Playwright: /workspace/[id]/graph → graph renders with nodes
+- [ ] Playwright: /study-room/[id] → real-time member list visible
+- [ ] Playwright: axe audit passes on /dashboard and /workspace/[id]
+- [ ] Playwright: offline simulation — flashcard review still works
+- [ ] Architecture audit: no async in handlers, all LLM calls tracked, no files over 400 lines
+- [ ] `git push origin feat/phase-3-platform-expansion`
+- [ ] Mark [x] phase-3-platform-expansion in tasks/phases.md

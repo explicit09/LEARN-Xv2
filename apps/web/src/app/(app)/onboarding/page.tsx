@@ -80,7 +80,7 @@ export default function OnboardingPage() {
     updateProfile.isPending || upsertPersona.isPending || completeOnboarding.isPending
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex flex-1 items-center justify-center bg-background p-8">
       <div className="w-full max-w-lg">
         <div className="mb-2 flex gap-1">
           {[1, 2, 3].map((s) => (
