@@ -44,6 +44,8 @@ export default async function DashboardPage() {
                 description={ws.description}
                 status={ws.status}
                 totalTokenCount={ws.total_token_count}
+                updatedAt={ws.updated_at as string | null}
+                createdAt={ws.created_at as string | null}
               />
             ))}
           </div>

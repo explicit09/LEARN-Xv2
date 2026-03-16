@@ -48,26 +48,43 @@ export function QuizList({ workspaceId }: QuizListProps) {
   }
 
   return (
-    <div className="space-y-3">
-      {quizzes.map((quiz) => (
-        <Link
-          key={quiz.id}
-          href={`/workspace/${workspaceId}/quiz/${quiz.id}`}
-          className="block rounded-lg border border-gray-200 p-4 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-500">
+          {quizzes.length} quiz{quizzes.length === 1 ? '' : 'zes'}
+        </p>
+        <button
+          onClick={() => generate.mutate({ workspaceId })}
+          disabled={generate.isPending}
+          className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
         >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">{quiz.title ?? 'Untitled Quiz'}</p>
-              <p className="mt-0.5 text-xs text-gray-500 capitalize">
-                {(quiz.quiz_type as string)?.replace('_', ' ')}
-              </p>
+          {generate.isPending ? 'Generating…' : 'Generate Quiz'}
+        </button>
+      </div>
+      {generate.isSuccess && (
+        <p className="text-xs text-green-600">Quiz generation started. Check back shortly.</p>
+      )}
+      <div className="space-y-3">
+        {quizzes.map((quiz) => (
+          <Link
+            key={quiz.id}
+            href={`/workspace/${workspaceId}/quiz/${quiz.id}`}
+            className="block rounded-lg border border-gray-200 p-4 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-gray-900">{quiz.title ?? 'Untitled Quiz'}</p>
+                <p className="mt-0.5 text-xs text-gray-500 capitalize">
+                  {(quiz.quiz_type as string)?.replace('_', ' ')}
+                </p>
+              </div>
+              <span className="text-xs text-gray-400">
+                {new Date(quiz.created_at as string).toLocaleDateString()}
+              </span>
             </div>
-            <span className="text-xs text-gray-400">
-              {new Date(quiz.created_at as string).toLocaleDateString()}
-            </span>
-          </div>
-        </Link>
-      ))}
+          </Link>
+        ))}
+      </div>
     </div>
   )
 }

@@ -20,6 +20,7 @@ export interface PlanItem {
   resourceType: string
   estimatedMinutes: number
   completed: boolean
+  workspaceId?: string
 }
 
 /**
@@ -74,6 +75,7 @@ async function buildStudyPlanItems(
       resourceType: 'lesson',
       estimatedMinutes: 15,
       completed: false,
+      workspaceId: lesson.workspace_id as string,
     })
   }
 
