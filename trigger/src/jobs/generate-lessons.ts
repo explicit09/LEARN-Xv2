@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { generateObject } from 'ai'
 import { z } from 'zod'
 
-import { anthropic, openaiProvider, MODEL_ROUTES } from '../lib/ai'
+import { anthropic, MODEL_ROUTES } from '../lib/ai'
 import { orderConceptsByPrerequisites } from '../lib/concept-ordering'
 import { PROMPT_VERSION, buildLessonPrompt } from '../lib/prompts/lesson-generation.v1'
 
@@ -100,22 +100,28 @@ async function embedTexts(texts: string[]): Promise<number[][]> {
   const res = await fetch('https://api.openai.com/v1/embeddings', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'text-embedding-3-large', input: texts, dimensions: EMBEDDING_DIMENSIONS }),
+    body: JSON.stringify({
+      model: 'text-embedding-3-large',
+      input: texts,
+      dimensions: EMBEDDING_DIMENSIONS,
+    }),
   })
-  if (!res.ok) { logger.warn('Embedding failed', { status: res.status }); return texts.map(() => []) }
+  if (!res.ok) {
+    logger.warn('Embedding failed', { status: res.status })
+    return texts.map(() => [])
+  }
   const json = (await res.json()) as { data: { embedding: number[]; index: number }[] }
   return json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding)
 }
 
 const MAX_ATTEMPTS = 2
 interface GenerateResult {
-  object: z.infer<typeof lessonOutputSchema>; promptTokens: number; completionTokens: number
+  object: z.infer<typeof lessonOutputSchema>
+  promptTokens: number
+  completionTokens: number
 }
 
-async function generateLessonWithRetry(
-  model: string,
-  prompt: string,
-): Promise<GenerateResult> {
+async function generateLessonWithRetry(model: string, prompt: string): Promise<GenerateResult> {
   let lastErr: unknown
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
@@ -172,7 +178,10 @@ export const generateLessons = task({
     const { data: relations } = await supabase
       .from('concept_relations')
       .select('source_concept_id, target_concept_id, relation_type')
-      .in('source_concept_id', concepts.map((c) => c.id))
+      .in(
+        'source_concept_id',
+        concepts.map((c) => c.id),
+      )
 
     const orderedConcepts = orderConceptsByPrerequisites(
       concepts,
@@ -193,21 +202,27 @@ export const generateLessons = task({
     // 4. Fetch user persona (all fields needed for personalization)
     const { data: persona } = await supabase
       .from('personas')
-      .select('interests, explanation_preferences, motivational_style, tone_preference, difficulty_preference')
+      .select(
+        'interests, explanation_preferences, motivational_style, tone_preference, difficulty_preference',
+      )
       .eq('user_id', userId)
       .order('version', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    const expPrefs =
-      (persona?.explanation_preferences as Record<string, string> | null) ?? {}
+    const expPrefs = (persona?.explanation_preferences as Record<string, string> | null) ?? {}
     const personaContext =
       persona != null
         ? ({
             ...(persona.interests ? { interests: persona.interests as string[] } : {}),
-            ...(expPrefs['explanationStyle'] ? { explanationStyle: expPrefs['explanationStyle'] } : {}),
-            ...(expPrefs['depthPreference'] ? { depthPreference: expPrefs['depthPreference'] } : {}),
-            tonePreference: (persona.tone_preference as string) ?? expPrefs['tonePreference'] ?? undefined,
+            ...(expPrefs['explanationStyle']
+              ? { explanationStyle: expPrefs['explanationStyle'] }
+              : {}),
+            ...(expPrefs['depthPreference']
+              ? { depthPreference: expPrefs['depthPreference'] }
+              : {}),
+            tonePreference:
+              (persona.tone_preference as string) ?? expPrefs['tonePreference'] ?? undefined,
             motivationalStyle: (persona.motivational_style as string) ?? undefined,
             difficultyPreference: (persona.difficulty_preference as string) ?? undefined,
             framingStrength: 'moderate' as const,
@@ -230,9 +245,7 @@ export const generateLessons = task({
         ).data?.map((s) => s.id) ?? [],
       )
 
-    const topicMap = new Map(
-      syllabusTopics?.map((t) => [t.title.toLowerCase(), t.id]) ?? [],
-    )
+    const topicMap = new Map(syllabusTopics?.map((t) => [t.title.toLowerCase(), t.id]) ?? [])
 
     // 6. Generate lessons in parallel batches
     const generatedLessons: string[] = []
@@ -267,9 +280,7 @@ export const generateLessons = task({
           p_match_count: 8,
           p_vector_weight: hasReal ? 0.7 : 0.0,
         })
-        retrievedChunks = (chunks ?? []).map(
-          (c: { content: string }) => c.content,
-        )
+        retrievedChunks = (chunks ?? []).map((c: { content: string }) => c.content)
       } catch {
         logger.warn('hybrid_search failed', { conceptId: concept.id })
       }
@@ -299,8 +310,7 @@ export const generateLessons = task({
           validation_passed: true,
         })
 
-        const syllabusTopicId =
-          topicMap.get(concept.name.toLowerCase()) ?? null
+        const syllabusTopicId = topicMap.get(concept.name.toLowerCase()) ?? null
 
         const { data: lesson, error: lessonError } = await supabase
           .from('lessons')

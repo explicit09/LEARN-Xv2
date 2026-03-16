@@ -112,12 +112,15 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-full w-56 flex-col bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))]">
-      <div className="flex h-14 items-center border-b border-[hsl(215,35%,18%)] px-4">
-        <span className="font-semibold tracking-tight text-white">LEARN-X</span>
+    <aside
+      className="flex h-full w-56 flex-col bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))]"
+      aria-label="Sidebar"
+    >
+      <div className="flex h-14 items-center border-b border-border/20 px-4">
+        <span className="font-semibold tracking-tight text-foreground">LEARN-X</span>
       </div>
 
-      <nav className="flex-1 space-y-0.5 p-2">
+      <nav className="flex-1 space-y-0.5 p-2" aria-label="Primary">
         {NAV_ITEMS.map((item) => (
           <Link
             key={item.href}
@@ -126,8 +129,8 @@ export function Sidebar() {
             className={cn(
               'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
               pathname === item.href || pathname.startsWith(item.href + '/')
-                ? 'bg-[hsl(221,83%,53%)] text-white font-medium'
-                : 'text-[hsl(214,32%,65%)] hover:bg-[hsl(215,28%,17%)] hover:text-white',
+                ? 'bg-primary text-primary-foreground font-medium'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
             )}
           >
             {item.icon}
@@ -137,10 +140,10 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-[hsl(215,35%,18%)] p-2">
+      <div className="border-t border-border/20 p-2">
         <button
           onClick={handleSignOut}
-          className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-[hsl(214,32%,55%)] transition-colors hover:bg-[hsl(215,28%,17%)] hover:text-white"
+          className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

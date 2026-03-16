@@ -44,7 +44,7 @@ export function WorkspaceCard({
           <div
             className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full border ${
               isActive
-                ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
                 : 'bg-muted text-muted-foreground border-border'
             }`}
           >
@@ -52,9 +52,7 @@ export function WorkspaceCard({
           </div>
         </div>
 
-        {description && (
-          <p className="text-sm text-muted-foreground line-clamp-2">{description}</p>
-        )}
+        {description && <p className="text-sm text-muted-foreground line-clamp-2">{description}</p>}
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{tokenLabel ?? 'No content yet'}</span>

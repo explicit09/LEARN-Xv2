@@ -26,7 +26,8 @@ export default async function FlashcardsPage({ params }: Props) {
         </Link>
         {workspace && (
           <h1 className="text-3xl md:text-5xl font-black tracking-tight text-foreground">
-            {workspace.name as string} <span className="text-muted-foreground/30">— Flashcards</span>
+            {workspace.name as string}{' '}
+            <span className="text-muted-foreground/30">— Flashcards</span>
           </h1>
         )}
       </div>
@@ -34,20 +35,20 @@ export default async function FlashcardsPage({ params }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <section className="glass-card rounded-3xl border border-border/50 p-6 md:p-8 shadow-sm h-fit">
           <div className="flex items-center gap-3 mb-6">
-             <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 border border-amber-500/20 shadow-inner">
-               <CalendarClock className="w-5 h-5" />
-             </div>
-             <h2 className="text-xl font-bold text-foreground">Due for Review</h2>
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 border border-amber-500/20 shadow-inner">
+              <CalendarClock className="w-5 h-5" />
+            </div>
+            <h2 className="text-xl font-bold text-foreground">Due for Review</h2>
           </div>
           <FlashcardReview workspaceId={id} />
         </section>
-        
+
         <section className="glass-card rounded-3xl border border-border/50 p-6 md:p-8 shadow-sm h-fit">
           <div className="flex items-center gap-3 mb-6">
-             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-inner">
-               <Layers className="w-5 h-5" />
-             </div>
-             <h2 className="text-xl font-bold text-foreground">All Sets</h2>
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-inner">
+              <Layers className="w-5 h-5" />
+            </div>
+            <h2 className="text-xl font-bold text-foreground">All Sets</h2>
           </div>
           <FlashcardSetList workspaceId={id} />
         </section>
