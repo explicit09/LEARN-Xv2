@@ -8,7 +8,11 @@ interface QuizListProps {
 }
 
 export function QuizList({ workspaceId }: QuizListProps) {
+  const utils = trpc.useUtils()
   const { data: quizzes, isLoading } = trpc.quiz.list.useQuery({ workspaceId })
+  const generate = trpc.quiz.generate.useMutation({
+    onSuccess: () => void utils.quiz.list.invalidate({ workspaceId }),
+  })
 
   if (isLoading) {
     return (
@@ -24,9 +28,21 @@ export function QuizList({ workspaceId }: QuizListProps) {
     return (
       <div className="py-12 text-center text-gray-500">
         <p className="text-sm">No quizzes yet.</p>
-        <p className="mt-1 text-xs text-gray-400">
-          Quizzes are generated automatically after document processing.
+        <p className="mt-1 text-xs text-gray-400 mb-4">
+          Generate quizzes from your lessons and concepts.
         </p>
+        <button
+          onClick={() => generate.mutate({ workspaceId })}
+          disabled={generate.isPending}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {generate.isPending ? 'Starting…' : 'Generate Quizzes'}
+        </button>
+        {generate.isSuccess && (
+          <p className="mt-2 text-xs text-green-600">
+            Quiz generation started. Check back shortly.
+          </p>
+        )}
       </div>
     )
   }
