@@ -37,6 +37,22 @@ async function resolveWorkspace(
 }
 
 export const quizRouter = createTRPCRouter({
+  generate: protectedProcedure
+    .input(z.object({ workspaceId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+      await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
+
+      try {
+        const { tasks } = await import('@trigger.dev/sdk/v3')
+        await tasks.trigger('generate-quiz', { workspaceId: input.workspaceId })
+      } catch {
+        // Trigger.dev not available in all environments — best effort
+      }
+
+      return { started: true }
+    }),
+
   list: protectedProcedure
     .input(z.object({ workspaceId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
