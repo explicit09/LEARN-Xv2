@@ -17,7 +17,7 @@ interface LessonRendererProps {
 
 export function LessonRenderer({ sections }: LessonRendererProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {sections.map((section, i) => (
         <LessonSectionBlock key={i} section={section} />
       ))}

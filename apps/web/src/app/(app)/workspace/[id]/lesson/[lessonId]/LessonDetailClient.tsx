@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { trpc } from '@/lib/trpc/client'
 import { LessonRenderer } from '@/components/lesson/LessonRenderer'
 import type { LessonSection } from '@learn-x/validators'
-import { BookOpen, CheckCircle, ChevronLeft, ChevronRight, PlayCircle, Hash } from 'lucide-react'
+import { BookOpen, CheckCircle, ChevronLeft, ChevronRight, PlayCircle } from 'lucide-react'
 import { Button } from '@learn-x/ui'
 
 interface LessonDetailClientProps {
@@ -65,8 +65,12 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
   const prevLesson = currentIndex > 0 ? sortedLessons[currentIndex - 1] : null
   const nextLesson = currentIndex < sortedLessons.length - 1 ? sortedLessons[currentIndex + 1] : null
 
-  // Calculate overall progress mock
   const progressPercent = Math.round(((currentIndex + 1) / Math.max(1, sortedLessons.length)) * 100)
+
+  // Count meaningful sections for progress display (exclude plain text)
+  const sections = (lesson.structuredSections as LessonSection[]) ?? []
+  const sectionCount = sections.length
+  const sectionTypes = sections.filter((s) => s.type !== 'text').map((s) => s.type)
 
   return (
     <div className="flex-1 flex flex-col md:flex-row max-w-[1600px] w-full mx-auto p-4 lg:p-8 gap-8 overflow-hidden">
@@ -138,6 +142,24 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
            </div>
            
            <div className="flex items-center gap-3">
+             <div className="hidden sm:flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-3 py-1.5 rounded-lg">
+               <span className="font-bold mr-1">{sectionCount} sections</span>
+               {sectionTypes.slice(0, 8).map((type, i) => {
+                 const colors: Record<string, string> = {
+                   concept_definition: 'bg-blue-500',
+                   analogy_card: 'bg-emerald-500',
+                   process_flow: 'bg-indigo-500',
+                   mini_quiz: 'bg-amber-500',
+                   comparison_table: 'bg-violet-500',
+                   timeline: 'bg-amber-400',
+                   key_takeaway: 'bg-primary',
+                   concept_bridge: 'bg-sky-400',
+                   quote_block: 'bg-gray-400',
+                   code_explainer: 'bg-orange-500',
+                 }
+                 return <span key={i} className={`w-2 h-2 rounded-full ${colors[type] ?? 'bg-muted-foreground'}`} />
+               })}
+             </div>
              <div className="flex items-center gap-1.5 text-xs font-bold tracking-wider uppercase text-muted-foreground bg-muted px-3 py-1.5 rounded-lg">
                 <PlayCircle className="w-3.5 h-3.5" />
                 ~15 min read

@@ -184,10 +184,10 @@ export const generateLessons = task({
     logger.info('Embedding concept queries', { count: conceptQueries.length })
     const embeddings = await embedTexts(conceptQueries)
 
-    // 4. Fetch user persona
+    // 4. Fetch user persona (all fields needed for personalization)
     const { data: persona } = await supabase
       .from('personas')
-      .select('interests, explanation_preferences')
+      .select('interests, explanation_preferences, motivational_style, tone_preference, difficulty_preference')
       .eq('user_id', userId)
       .order('version', { ascending: false })
       .limit(1)
@@ -198,18 +198,13 @@ export const generateLessons = task({
     const personaContext =
       persona != null
         ? ({
-            ...(persona.interests
-              ? { interests: persona.interests as string[] }
-              : {}),
-            ...(expPrefs['explanationStyle']
-              ? { explanationStyle: expPrefs['explanationStyle'] }
-              : {}),
-            ...(expPrefs['depthPreference']
-              ? { depthPreference: expPrefs['depthPreference'] }
-              : {}),
-            ...(expPrefs['tonePreference']
-              ? { tonePreference: expPrefs['tonePreference'] }
-              : {}),
+            ...(persona.interests ? { interests: persona.interests as string[] } : {}),
+            ...(expPrefs['explanationStyle'] ? { explanationStyle: expPrefs['explanationStyle'] } : {}),
+            ...(expPrefs['depthPreference'] ? { depthPreference: expPrefs['depthPreference'] } : {}),
+            tonePreference: (persona.tone_preference as string) ?? expPrefs['tonePreference'] ?? undefined,
+            motivationalStyle: (persona.motivational_style as string) ?? undefined,
+            difficultyPreference: (persona.difficulty_preference as string) ?? undefined,
+            framingStrength: 'moderate' as const,
           } as Parameters<typeof buildLessonPrompt>[0]['persona'])
         : undefined
 

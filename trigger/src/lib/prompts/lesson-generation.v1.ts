@@ -2,27 +2,26 @@
 // Static generative UI only (no interactive_widget — added in Phase 1D+)
 // See docs/10-generative-ui.md for the full component library spec
 
-export const PROMPT_VERSION = 'lesson-generation.v1'
+export const PROMPT_VERSION = 'lesson-generation.v2'
 
 // Component selection rules injected into every lesson generation call.
-// Teaches the AI WHEN to use each component type — not just WHAT to say.
 export const LESSON_COMPONENT_INSTRUCTIONS = `
 You are generating a structured lesson. For each section, choose the component type
 that will help the student understand most effectively.
 Do NOT default to 'text' for everything — that is the failure mode.
 
-Available component types (Phase 1D):
-- text: narrative explanation, context, storytelling
-- concept_definition: any term appearing for the first time
-- process_flow: any procedure with 3+ steps
-- comparison_table: any "X vs Y" or "A, B, C differ in..." explanation
-- analogy_card: any concept with a clear real-world parallel
-- key_takeaway: REQUIRED at the end of every lesson (3-5 bullet points)
-- mini_quiz: after every 2-3 complex sections (single MCQ or true/false)
-- quote_block: primary source material, original definitions
-- timeline: historical sequences, process evolution
-- concept_bridge: linking this concept to a prerequisite or next concept
-- code_explainer: code examples, algorithms, syntax
+Available component types:
+- text: narrative explanation, context, storytelling. Use for hooks and transitions.
+- concept_definition: any term appearing for the first time. Include analogy field when helpful.
+- process_flow: any procedure with 3+ steps.
+- comparison_table: any "X vs Y" or "A, B, C differ in..." explanation. Make tables scannable.
+- analogy_card: any abstract concept with a real-world parallel. Use the student's interests as the analogy domain when possible. The mapping array must explicitly link abstract→familiar with at least 2 pairs.
+- key_takeaway: REQUIRED at the end of every lesson (3-5 bullet points). This is the most important section — it's what the student remembers.
+- mini_quiz: after every 2-3 complex sections (single MCQ with 4 options).
+- quote_block: primary source material, original definitions, notable quotes.
+- timeline: historical sequences, process evolution, discovery chronology.
+- concept_bridge: linking this concept to a prerequisite or next concept. Use at end of lesson to show where this fits in the learning path.
+- code_explainer: code examples, algorithms, syntax.
 
 Component selection rules:
 - First appearance of any term → concept_definition (not text)
@@ -33,11 +32,20 @@ Component selection rules:
 - End of lesson → key_takeaway (required, not optional)
 - Any algorithm or code → code_explainer (not a code fence in text)
 
+Lesson structure (follow this order):
+1. Hook (text) — an engaging, relatable opening that makes the student care
+2. Core concepts (concept_definition, analogy_card, text) — build understanding layer by layer
+3. Application (process_flow, comparison_table, code_explainer) — show how to use the knowledge
+4. Check understanding (mini_quiz) — active recall checkpoint
+5. Context (timeline, quote_block, text) — where this fits in the bigger picture
+6. Connection (concept_bridge) — link to what comes next
+7. Summary (key_takeaway) — the 3-5 things to remember
+
 Format rules:
-- Lessons must have at minimum: 1 hook (text), 2+ concept sections, 1 key_takeaway
 - mini_quiz options must have exactly one is_correct: true
 - concept_bridge relation must be one of: prerequisite, extends, related
 - Do NOT use interactive_widget or data_visualization (not yet available)
+- Avoid back-to-back concept_definitions — insert a text bridge or analogy between them
 `
 
 export interface LessonPromptParams {
@@ -49,12 +57,16 @@ export interface LessonPromptParams {
     explanationStyle?: string
     depthPreference?: string
     tonePreference?: string
-    analogyDomain?: string
+    motivationalStyle?: string
+    difficultyPreference?: string
+    analogyDomain?: string | null
+    framingStrength?: 'light' | 'moderate' | 'none'
   }
 }
 
 export function buildLessonPrompt(params: LessonPromptParams): string {
   const { conceptName, prerequisites, retrievedChunks, persona } = params
+  const strength = persona?.framingStrength ?? 'moderate'
 
   const personaSection = persona
     ? `
@@ -62,14 +74,24 @@ Student profile:
 - Learning style: ${persona.explanationStyle ?? 'visual'}
 - Explanation depth: ${persona.depthPreference ?? 'thorough'}
 - Tone preference: ${persona.tonePreference ?? 'conversational'}
+- Motivation: ${persona.motivationalStyle ?? 'curiosity'}
+- Level: ${persona.difficultyPreference ?? 'intermediate'}
 - Interests: ${persona.interests?.join(', ') ?? 'general'}
-${persona.analogyDomain ? `- Suggested analogy domain: ${persona.analogyDomain}` : ''}
+
+Interest-based framing:
+${persona.analogyDomain ? `- Best-match analogy domain for this concept: ${persona.analogyDomain}` : '- No specific domain match — use any clear real-world parallel'}
+- Framing strength: ${strength}
+  ${strength === 'light' ? '→ Use ONE interest-based analogy in the hook only. Rest is academic.' : ''}
+  ${strength === 'moderate' ? '→ Use the interest domain for the analogy_card and 1-2 examples. Then switch to academic language.' : ''}
+  ${strength === 'none' ? '→ Do NOT use interest-based analogies. Use generic real-world parallels only.' : ''}
 
 Framing rules:
-- Use the student's interests for examples and analogies where it helps understanding.
-- Once the student grasps the concept, switch to precise academic language.
-- Never force a metaphor where the literal explanation is clearer.
-- Academic precision always wins when style and accuracy conflict.
+- Analogies should feel NATURAL — as if the student's interest organically illustrates the concept.
+- Bad: "Since you like basketball, think of X as Y." (forced, breaks immersion)
+- Good: "When a point guard drives to the basket, the defense collapses inward — that compression is exactly what happens to gas molecules..." (natural, the analogy IS the explanation)
+- If no analogy domain fits naturally, use a universal real-world scenario instead.
+- Once the concept clicks, shift to precise academic language immediately.
+- Academic precision ALWAYS wins when it conflicts with framing.
 `
     : ''
 
@@ -90,7 +112,7 @@ ${prerequisiteSection}
 
 ${chunksSection}
 
-Generate a complete lesson with a clear title, structured sections using the component types above,
-and key takeaways at the end. The lesson should be self-contained and build understanding
-from the ground up.`
+Generate a complete lesson following the structure above. The lesson should feel like
+a skilled tutor explaining the concept — engaging, clear, and building understanding
+from the ground up. End with key_takeaway (required).`
 }
