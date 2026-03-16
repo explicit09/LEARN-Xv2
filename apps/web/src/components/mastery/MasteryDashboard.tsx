@@ -9,10 +9,10 @@ interface MasteryDashboardProps {
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lg border border-gray-200 p-4">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
+    <div className="min-w-0 overflow-hidden rounded-lg border border-gray-200 p-4">
+      <p className="truncate text-xs text-gray-500">{label}</p>
+      <p className="mt-1 truncate text-2xl font-bold text-gray-900">{value}</p>
+      {sub && <p className="mt-0.5 truncate text-xs text-gray-400">{sub}</p>}
     </div>
   )
 }
@@ -44,7 +44,7 @@ export function MasteryDashboard({ workspaceId }: MasteryDashboardProps) {
   return (
     <div className="space-y-8">
       {/* Summary stats */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="Concepts" value={summary?.totalConcepts ?? 0} />
         <StatCard label="Mastered" value={summary?.mastered ?? 0} sub={`${masteryPct}% of total`} />
         <StatCard label="Struggling" value={summary?.struggling ?? 0} sub="high lapse rate" />

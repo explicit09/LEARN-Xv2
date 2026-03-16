@@ -75,9 +75,18 @@ function PlanItemIcon({ type }: { type: string }) {
   )
 }
 
-function getItemHref(item: { type: string; resourceId: string; resourceType: string }): string {
+function getItemHref(item: {
+  type: string
+  resourceId: string
+  resourceType: string
+  workspaceId?: string
+}): string {
   if (item.type === 'flashcard_review') return '/dashboard'
-  if (item.type === 'lesson') return `/workspace/unknown/lesson/${item.resourceId}`
+  if (item.type === 'lesson') {
+    const wsId = item.workspaceId
+    if (wsId) return `/workspace/${wsId}/lesson/${item.resourceId}`
+    return '/dashboard'
+  }
   return '/dashboard'
 }
 

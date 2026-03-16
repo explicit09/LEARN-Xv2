@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Topbar } from '@/components/layout/Topbar'
 import { WorkspaceDocuments } from '@/components/document/WorkspaceDocuments'
@@ -44,6 +44,11 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
     notFound()
   }
 
+  // Auto-redirect tabs that have dedicated full pages
+  if (activeTab === 'chat') redirect(`/workspace/${id}/chat`)
+  if (activeTab === 'exam') redirect(`/workspace/${id}/exam`)
+  if (activeTab === 'graph') redirect(`/workspace/${id}/graph`)
+
   const documents = await caller.document.list({ workspaceId: id }).catch(() => [])
   const hasDocuments = documents.length > 0
 
@@ -74,17 +79,6 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
         {activeTab === 'concepts' && <ConceptList workspaceId={id} />}
         {activeTab === 'syllabus' && <SyllabusView workspaceId={id} hasDocuments={hasDocuments} />}
         {activeTab === 'lessons' && <LessonList workspaceId={id} />}
-        {activeTab === 'chat' && (
-          <div className="flex flex-col items-center gap-4 py-12 text-center">
-            <p className="text-sm text-muted-foreground">Chat with your course materials</p>
-            <Link
-              href={`/workspace/${id}/chat`}
-              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
-            >
-              Open Chat
-            </Link>
-          </div>
-        )}
         {activeTab === 'quiz' && (
           <div className="flex flex-col items-center gap-4 py-12 text-center">
             <p className="text-sm text-muted-foreground">Test your knowledge with quizzes</p>
@@ -110,32 +104,6 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
           </div>
         )}
         {activeTab === 'mastery' && <MasteryDashboard workspaceId={id} />}
-        {activeTab === 'exam' && (
-          <div className="flex flex-col items-center gap-4 py-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              Formal timed exams with Bloom&apos;s-tagged questions
-            </p>
-            <Link
-              href={`/workspace/${id}/exam`}
-              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
-            >
-              View Exams
-            </Link>
-          </div>
-        )}
-        {activeTab === 'graph' && (
-          <div className="flex flex-col items-center gap-4 py-12 text-center">
-            <p className="text-sm text-muted-foreground">
-              Force-directed map of all concepts and their relationships
-            </p>
-            <Link
-              href={`/workspace/${id}/graph`}
-              className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-opacity"
-            >
-              Open Knowledge Graph
-            </Link>
-          </div>
-        )}
       </div>
     </>
   )
