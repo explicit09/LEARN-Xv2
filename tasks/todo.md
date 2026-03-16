@@ -752,6 +752,7 @@ Complete. Mastery Dashboard implemented.
 **Why:** Half the database tables exist only as SQL migrations. Any TypeScript code expecting Drizzle schema will fail silently. This is the #1 structural gap.
 
 **Plan:**
+
 - [ ] Read migrations 0008-0015 to catalog all tables/columns
 - [ ] Create `schema-mastery.ts` — mastery_records, learning_events (migration 0008)
 - [ ] Create `schema-audio.ts` — audio_recaps (migration 0010)
@@ -769,6 +770,7 @@ Complete. Mastery Dashboard implemented.
 **Why:** Study plans compute from mastery data + due flashcards + incomplete lessons. Currently inline in router, violating Rule 1 (every heavy task is a Job).
 
 **Plan:**
+
 - [ ] Read `docs/07-ai-pipeline.md` for job conventions
 - [ ] Write FAILING test: `trigger/src/__tests__/study-plan.test.ts` — test priority scoring logic
 - [ ] Create `trigger/src/lib/study-plan-scorer.ts` — pure function for prioritizing study items
@@ -784,6 +786,7 @@ Complete. Mastery Dashboard implemented.
 **Why:** No rate limiting on any endpoint. Production risk for cost + abuse. Docs specify Upstash Redis sliding window.
 
 **Plan:**
+
 - [ ] Install `@upstash/ratelimit` + `@upstash/redis`
 - [ ] Create `apps/web/src/server/middleware/rate-limit.ts`
 - [ ] Write FAILING test for rate limit logic (pure function test for window calculation)
@@ -802,6 +805,7 @@ Complete. Mastery Dashboard implemented.
 **Why:** Zero way to measure AI output quality. No retrieval golden dataset, no lesson rubrics. Flying blind on quality.
 
 **Plan:**
+
 - [ ] Create `tooling/eval/` directory structure
 - [ ] Create retrieval golden dataset: `tooling/eval/retrieval-golden.json` (10 query/expected-chunk pairs from ML101 workspace)
 - [ ] Create `tooling/eval/run-retrieval-eval.ts` — runs hybrid_search against golden dataset, reports precision@k
@@ -815,6 +819,7 @@ Complete. Mastery Dashboard implemented.
 **Why:** No spending limits. A runaway prompt or abuse could generate unbounded LLM costs.
 
 **Plan:**
+
 - [ ] Write FAILING test: cost calculation per model (pure function)
 - [ ] Create `apps/web/src/lib/ai/cost-calculator.ts` — token cost math per model
 - [ ] Create `get_user_daily_spend` Supabase RPC function (new migration)
@@ -829,6 +834,7 @@ Complete. Mastery Dashboard implemented.
 **Why:** Each Trigger job inserts ai_requests rows independently with ad-hoc code. A centralized wrapper ensures no LLM call is ever untracked.
 
 **Plan:**
+
 - [ ] Write FAILING test: wrapper inserts ai_requests row with correct fields
 - [ ] Create `trigger/src/lib/tracked-generate.ts` — wraps `generateObject`/`generateText`/`streamText` with automatic ai_requests tracking
 - [ ] Refactor `generate-lessons.ts` to use `trackedGenerate`
@@ -836,6 +842,77 @@ Complete. Mastery Dashboard implemented.
 - [ ] Refactor `extract-concepts.ts` to use `trackedGenerate`
 - [ ] Verify all jobs still pass: run each against a test workspace
 - [ ] Run `pnpm test:unit` + `pnpm typecheck`
+
+---
+
+## Technical Debt — Tier 3 (Complete Remaining Phases)
+
+### Task 7: Analytics Router + Dashboard
+
+**Why:** `/analytics` page exists as a "Coming Soon" placeholder. Docs define `analytics.getDashboard` and `analytics.getStudyHeatmap`. Quick win.
+
+**Plan:**
+
+- [ ] Write FAILING contract test: `analytics.contract.test.ts` — getDashboard returns shape, getStudyHeatmap returns date/minutes array
+- [ ] Create `packages/validators/src/analytics.ts` — getDashboardSchema, getStudyHeatmapSchema
+- [ ] Create `apps/web/src/server/routers/analytics.ts` — getDashboard (recent workspaces, study streak, total mastered), getStudyHeatmap (from learning_events)
+- [ ] Wire into `_app.ts`
+- [ ] Update `/analytics` page with real data (stats cards + heatmap grid)
+- [ ] Run `pnpm test:unit` + `pnpm typecheck`
+- [ ] Browser test: /analytics shows real stats
+
+### Task 8: Accessibility Audit (Phase 3C)
+
+**Why:** No axe audit has been done. Legal compliance + usability requirement.
+
+**Plan:**
+
+- [ ] Install `@axe-core/playwright`
+- [ ] Run axe on /dashboard, /workspace/[id], /study, /login
+- [ ] Fix all critical + serious violations (missing ARIA labels, focus management, contrast)
+- [ ] Add keyboard focus trap to all modals (CreateWorkspaceModal, etc.)
+- [ ] Verify `SkipLink` component works
+- [ ] Re-run axe — zero critical/serious violations
+- [ ] Browser test: tab through key flows, verify focus visible
+
+### Task 9: Eval Tooling (`tooling/eval/`)
+
+**Why:** Zero way to measure AI output quality. Need baseline metrics before any model/prompt changes.
+
+**Plan:**
+
+- [ ] Create `tooling/eval/` directory
+- [ ] Create `tooling/eval/lesson-rubric.ts` — pure function scoring: section diversity (min 5 types), takeaway presence, quiz placement, no back-to-back definitions
+- [ ] Write FAILING test for rubric scoring logic
+- [ ] Implement rubric → tests pass
+- [ ] Create `tooling/eval/run-lesson-eval.ts` — fetch lessons from DB, score each, report aggregate
+- [ ] Wire `pnpm eval:lessons` command
+- [ ] Run against ML101 lessons — record baseline scores
+- [ ] Run `pnpm typecheck`
+
+### Task 10: Langfuse Tracing
+
+**Why:** Observability client exists but is never wired in. Need multi-step traces for lesson generation + chat.
+
+**Plan:**
+
+- [ ] Read `apps/web/src/lib/ai/observability.ts` for existing client
+- [ ] Wire Langfuse trace into `/api/chat` route (span per retrieval + generation step)
+- [ ] Wire into `generate-lessons` job (trace per concept, span per embed + search + generate)
+- [ ] Verify traces appear in Langfuse dashboard (or log if no key configured)
+- [ ] Run `pnpm typecheck`
+
+---
+
+## Technical Debt — Tier 4 (Polish)
+
+### Task 11: Tooling Scripts
+
+**Plan:**
+
+- [ ] Create `tooling/scripts/db-seed.ts` — seed dev data (test user, workspace, document, concepts)
+- [ ] Wire `pnpm db:seed` command
+- [ ] Run `pnpm typecheck`
 
 ---
 
