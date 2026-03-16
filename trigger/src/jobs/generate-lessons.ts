@@ -77,6 +77,12 @@ const lessonSectionZ = z.discriminatedUnion('type', [
     code: z.string(),
     annotations: z.array(z.object({ line: z.number(), note: z.string() })),
   }),
+  z.object({
+    type: z.literal('interactive_widget'),
+    title: z.string(),
+    description: z.string(),
+    html: z.string(),
+  }),
 ])
 
 const lessonOutputSchema = z.object({

@@ -22,6 +22,7 @@ Available component types:
 - timeline: historical sequences, process evolution, discovery chronology.
 - concept_bridge: linking this concept to a prerequisite or next concept. Use at end of lesson to show where this fits in the learning path.
 - code_explainer: code examples, algorithms, syntax.
+- interactive_widget: a LIVE interactive HTML/CSS/JS widget embedded in the lesson. The student can manipulate sliders, click buttons, see graphs move, explore visually. Use this for any concept where playing with variables builds understanding faster than reading. The "html" field contains the full HTML/CSS/JS code that renders inside a sandboxed iframe.
 
 Component selection rules:
 - First appearance of any term → concept_definition (not text)
@@ -31,21 +32,42 @@ Component selection rules:
 - After every 2-3 complex concept_definition or process_flow sections → mini_quiz
 - End of lesson → key_takeaway (required, not optional)
 - Any algorithm or code → code_explainer (not a code fence in text)
+- Any concept with variable relationships (math, science, finance, statistics) → interactive_widget
+- Any concept where "what happens if I change X?" is the key insight → interactive_widget
+- Career paths, decision trees, branching outcomes → interactive_widget
+
+interactive_widget rules:
+- The "html" field must be a COMPLETE, self-contained HTML snippet (no external dependencies).
+- Use inline CSS and vanilla JavaScript only. No frameworks, no CDN links.
+- Use Canvas API for charts/graphs. Use DOM manipulation for sliders and controls.
+- Keep it focused: ONE interactive idea per widget. Don't try to build a full app.
+- The widget must work immediately — no loading, no setup.
+- Use the base styles provided by the container (font-family, button, input[type=range], .label, .value classes are available).
+- Maximum ~150 lines of HTML/CSS/JS combined. Keep it lean.
+- Include at least one interactive control (slider, button, or clickable element).
+- Show the result of interaction visually (a number updating, a graph redrawing, a path highlighting).
+- Example use cases:
+  - Compound interest: sliders for rate, time, principal → live graph
+  - Gas laws: slider for pressure → volume changes inversely (animated)
+  - Supply/demand: drag supply or demand curve → equilibrium moves
+  - Career paths: click a field → branching diagram shows options
+  - Sorting algorithms: click "step" → see the array rearrange
 
 Lesson structure (follow this order):
 1. Hook (text) — an engaging, relatable opening that makes the student care
 2. Core concepts (concept_definition, analogy_card, text) — build understanding layer by layer
-3. Application (process_flow, comparison_table, code_explainer) — show how to use the knowledge
-4. Check understanding (mini_quiz) — active recall checkpoint
-5. Context (timeline, quote_block, text) — where this fits in the bigger picture
-6. Connection (concept_bridge) — link to what comes next
-7. Summary (key_takeaway) — the 3-5 things to remember
+3. Explore (interactive_widget) — let the student PLAY with the concept, if applicable
+4. Application (process_flow, comparison_table, code_explainer) — show how to use the knowledge
+5. Check understanding (mini_quiz) — active recall checkpoint
+6. Context (timeline, quote_block, text) — where this fits in the bigger picture
+7. Connection (concept_bridge) — link to what comes next
+8. Summary (key_takeaway) — the 3-5 things to remember
 
 Format rules:
 - mini_quiz options must have exactly one is_correct: true
 - concept_bridge relation must be one of: prerequisite, extends, related
-- Do NOT use interactive_widget or data_visualization (not yet available)
 - Avoid back-to-back concept_definitions — insert a text bridge or analogy between them
+- Use at most 1-2 interactive_widgets per lesson (they're powerful but heavy)
 `
 
 export interface LessonPromptParams {
