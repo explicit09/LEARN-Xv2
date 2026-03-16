@@ -1,6 +1,8 @@
 'use client'
 
 import { useRef, type FormEvent } from 'react'
+import { ArrowUp, Paperclip } from 'lucide-react'
+import { Button } from '@learn-x/ui'
 
 interface ChatInputProps {
   value: string
@@ -19,7 +21,8 @@ export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputPro
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    // Submit on Enter (without shift)
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (!value.trim() || isLoading) return
       onSubmit()
@@ -27,24 +30,44 @@ export function ChatInput({ value, onChange, onSubmit, isLoading }: ChatInputPro
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Ask a question… (⌘↵ to send)"
-        rows={3}
-        disabled={isLoading}
-        className="flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-      />
-      <button
-        type="submit"
-        disabled={!value.trim() || isLoading}
-        className="shrink-0 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-40 transition-opacity"
-      >
-        {isLoading ? '…' : 'Send'}
-      </button>
+    <form onSubmit={handleSubmit} className="relative group">
+      <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 via-purple-500/20 to-primary/20 rounded-3xl blur opacity-30 group-hover:opacity-60 transition duration-1000 group-hover:duration-200" />
+      
+      <div className="relative flex items-center gap-2 rounded-2xl border border-border/50 bg-card/60 backdrop-blur-xl p-2 shadow-2xl focus-within:border-primary/50 focus-within:bg-card transition-all">
+        
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-10 w-10 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+        >
+          <Paperclip className="w-4 h-4" />
+        </Button>
+
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Message AI Coach..."
+          rows={1}
+          disabled={isLoading}
+          className="flex-1 max-h-32 min-h-10 resize-none bg-transparent px-2 py-2.5 text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+          style={{ height: 'auto' }}
+        />
+
+        <Button
+          type="submit"
+          disabled={!value.trim() || isLoading}
+          className={`shrink-0 h-10 w-10 rounded-xl transition-all ${
+            value.trim() && !isLoading 
+              ? 'bg-primary text-primary-foreground shadow-[0_0_15px_rgba(37,99,235,0.5)] hover:bg-primary/90 hover:scale-105'
+              : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          <ArrowUp className="w-5 h-5" />
+        </Button>
+      </div>
     </form>
   )
 }

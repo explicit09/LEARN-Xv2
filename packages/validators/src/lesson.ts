@@ -109,6 +109,13 @@ export const codeExplainerSectionSchema = z.object({
   ),
 })
 
+export const interactiveWidgetSectionSchema = z.object({
+  type: z.literal('interactive_widget'),
+  title: z.string().min(1),
+  description: z.string(),
+  html: z.string().min(1),
+})
+
 export const lessonSectionSchema = z.discriminatedUnion('type', [
   textSectionSchema,
   conceptDefinitionSectionSchema,
@@ -121,6 +128,7 @@ export const lessonSectionSchema = z.discriminatedUnion('type', [
   timelineSectionSchema,
   conceptBridgeSectionSchema,
   codeExplainerSectionSchema,
+  interactiveWidgetSectionSchema,
 ])
 
 export type LessonSection = z.infer<typeof lessonSectionSchema>

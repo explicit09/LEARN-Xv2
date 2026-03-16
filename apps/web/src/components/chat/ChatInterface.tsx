@@ -5,6 +5,7 @@ import { useChat } from 'ai/react'
 import { trpc } from '@/lib/trpc/client'
 import { ChatMessage } from './ChatMessage'
 import { ChatInput } from './ChatInput'
+import { Sparkles } from 'lucide-react'
 
 interface ChatInterfaceProps {
   sessionId: string
@@ -43,14 +44,21 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
   const citationsMap = new Map(initialMessages.map((m) => [m.id, m.cited_chunk_ids ?? []]))
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full max-w-4xl mx-auto w-full relative z-10">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 py-8 space-y-8 custom-scrollbar">
         {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-muted-foreground">Ask anything about your materials</p>
+          <div className="flex flex-col items-center justify-center h-full text-center">
+             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6 shadow-inner border border-primary/20">
+                <Sparkles className="w-8 h-8" />
+             </div>
+             <h2 className="text-2xl font-bold mb-2">How can I help you learn?</h2>
+             <p className="text-muted-foreground max-w-md">
+               I have full context of your workspace documents. Ask me to explain concepts, summarize readings, or generate practice questions.
+             </p>
           </div>
         )}
+        
         {messages.map((m) => {
           const citations = citationsMap.get(m.id)
           return (
@@ -62,18 +70,26 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
             />
           )
         })}
+        
         {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-muted rounded-xl px-4 py-3 text-sm text-muted-foreground">
-              <span className="animate-pulse">Thinking…</span>
-            </div>
+          <div className="flex items-start gap-4">
+             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0">
+               <Sparkles className="w-4 h-4 animate-pulse" />
+             </div>
+             <div className="bg-card/50 backdrop-blur-sm border border-border/50 rounded-2xl px-5 py-3">
+               <span className="flex space-x-1.5 h-6 items-center">
+                 <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                 <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                 <span className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+               </span>
+             </div>
           </div>
         )}
-        <div ref={bottomRef} />
+        <div ref={bottomRef} className="h-4" />
       </div>
 
       {/* Input */}
-      <div className="border-t border-border p-4">
+      <div className="p-4 md:p-6 bg-gradient-to-t from-background via-background to-transparent">
         <ChatInput
           value={input}
           onChange={(v) =>
@@ -82,6 +98,9 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
           onSubmit={() => handleSubmit()}
           isLoading={isLoading}
         />
+        <div className="text-center mt-3">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">AI Coach can make mistakes. Verify important information.</span>
+        </div>
       </div>
     </div>
   )

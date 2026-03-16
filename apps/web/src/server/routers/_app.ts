@@ -1,4 +1,5 @@
 import { createTRPCRouter } from '../trpc'
+import { analyticsRouter } from './analytics'
 import { audioRecapRouter } from './audioRecap'
 import { chatRouter } from './chat'
 import { courseRouter } from './course'
@@ -37,6 +38,7 @@ export const appRouter = createTRPCRouter({
   knowledgeGraph: knowledgeGraphRouter,
   studyRoom: studyRoomRouter,
   admin: adminRouter,
+  analytics: analyticsRouter,
 })
 
 export type AppRouter = typeof appRouter

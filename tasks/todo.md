@@ -740,6 +740,182 @@ Complete. Mastery Dashboard implemented.
 
 ---
 
+---
+
+## Technical Debt — Tier 1 (Foundation Fixes)
+
+**Branch:** `chore/tier1-tier2-tech-debt`
+**Goal:** Fix critical gaps between docs and implementation before building new features.
+
+### Task 1: Sync Drizzle Schema with Migrations (0008–0015)
+
+**Why:** Half the database tables exist only as SQL migrations. Any TypeScript code expecting Drizzle schema will fail silently. This is the #1 structural gap.
+
+**Plan:**
+
+- [ ] Read migrations 0008-0015 to catalog all tables/columns
+- [ ] Create `schema-mastery.ts` — mastery_records, learning_events (migration 0008)
+- [ ] Create `schema-audio.ts` — audio_recaps (migration 0010)
+- [ ] Create `schema-studyplans.ts` — study_plans (migration 0011)
+- [ ] Create `schema-instructor.ts` — instructor_profiles, courses, course_enrollments, course_documents (migration 0012)
+- [ ] Create `schema-knowledge-graph.ts` — concept_tags, concept_relations_global (migration 0013)
+- [ ] Create `schema-study-rooms.ts` — study_rooms, study_room_members, study_room_messages (migration 0014)
+- [ ] Create `schema-admin.ts` — user_roles (migration 0015)
+- [ ] Export all from `schema.ts` barrel
+- [ ] Run `pnpm typecheck` — verify zero errors
+- [ ] Run `pnpm test:unit` — verify no regressions
+
+### Task 2: Build `generate-study-plan` Trigger Job (Phase 2C)
+
+**Why:** Study plans compute from mastery data + due flashcards + incomplete lessons. Currently inline in router, violating Rule 1 (every heavy task is a Job).
+
+**Plan:**
+
+- [ ] Read `docs/07-ai-pipeline.md` for job conventions
+- [ ] Write FAILING test: `trigger/src/__tests__/study-plan.test.ts` — test priority scoring logic
+- [ ] Create `trigger/src/lib/study-plan-scorer.ts` — pure function for prioritizing study items
+- [ ] Implement tests → green
+- [ ] Create `trigger/src/jobs/generate-study-plan.ts` — fetch mastery, due cards, incomplete lessons → prioritize → upsert study_plans
+- [ ] Create validator: `packages/validators/src/studyPlan.ts` with FAILING tests first
+- [ ] Update `studyPlan` router to trigger the job instead of inline computation
+- [ ] Run `pnpm test:unit` + `pnpm typecheck`
+- [ ] Browser test: /study page loads with generated plan
+
+### Task 3: Add Rate Limiting Middleware
+
+**Why:** No rate limiting on any endpoint. Production risk for cost + abuse. Docs specify Upstash Redis sliding window.
+
+**Plan:**
+
+- [ ] Install `@upstash/ratelimit` + `@upstash/redis`
+- [ ] Create `apps/web/src/server/middleware/rate-limit.ts`
+- [ ] Write FAILING test for rate limit logic (pure function test for window calculation)
+- [ ] Implement rate limiter: 30/hr chat, 10/hr quiz.generate, 10/hr flashcard.generate, 5/hr lesson.regenerate
+- [ ] Wire into tRPC middleware for affected procedures
+- [ ] Add `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` env vars
+- [ ] Run `pnpm typecheck`
+- [ ] Browser test: verify 429 response after exceeding limit
+
+---
+
+## Technical Debt — Tier 2 (Quality Infrastructure)
+
+### Task 4: Build Evaluation Tooling (`tooling/eval/`)
+
+**Why:** Zero way to measure AI output quality. No retrieval golden dataset, no lesson rubrics. Flying blind on quality.
+
+**Plan:**
+
+- [ ] Create `tooling/eval/` directory structure
+- [ ] Create retrieval golden dataset: `tooling/eval/retrieval-golden.json` (10 query/expected-chunk pairs from ML101 workspace)
+- [ ] Create `tooling/eval/run-retrieval-eval.ts` — runs hybrid_search against golden dataset, reports precision@k
+- [ ] Wire up `pnpm eval:retrieval` command
+- [ ] Create lesson quality rubric: `tooling/eval/lesson-rubric.ts` — checks section diversity, takeaway presence, quiz placement
+- [ ] Run eval against current lessons, report baseline scores
+- [ ] Run `pnpm typecheck`
+
+### Task 5: Implement Cost Guards
+
+**Why:** No spending limits. A runaway prompt or abuse could generate unbounded LLM costs.
+
+**Plan:**
+
+- [ ] Write FAILING test: cost calculation per model (pure function)
+- [ ] Create `apps/web/src/lib/ai/cost-calculator.ts` — token cost math per model
+- [ ] Create `get_user_daily_spend` Supabase RPC function (new migration)
+- [ ] Create `apps/web/src/server/middleware/cost-guard.ts` — `checkUserDailyBudget()`
+- [ ] Wire into AI-generating procedures (quiz.generate, flashcard.generate, lesson.regenerate, /api/chat)
+- [ ] Add `DAILY_SPEND_LIMIT_USD` env var (default $5)
+- [ ] Run `pnpm test:unit` + `pnpm typecheck`
+- [ ] Browser test: verify rejection when budget exceeded
+
+### Task 6: Create `trackedGenerate` Wrapper
+
+**Why:** Each Trigger job inserts ai_requests rows independently with ad-hoc code. A centralized wrapper ensures no LLM call is ever untracked.
+
+**Plan:**
+
+- [ ] Write FAILING test: wrapper inserts ai_requests row with correct fields
+- [ ] Create `trigger/src/lib/tracked-generate.ts` — wraps `generateObject`/`generateText`/`streamText` with automatic ai_requests tracking
+- [ ] Refactor `generate-lessons.ts` to use `trackedGenerate`
+- [ ] Refactor `generate-syllabus.ts` to use `trackedGenerate`
+- [ ] Refactor `extract-concepts.ts` to use `trackedGenerate`
+- [ ] Verify all jobs still pass: run each against a test workspace
+- [ ] Run `pnpm test:unit` + `pnpm typecheck`
+
+---
+
+## Technical Debt — Tier 3 (Complete Remaining Phases)
+
+### Task 7: Analytics Router + Dashboard
+
+**Why:** `/analytics` page exists as a "Coming Soon" placeholder. Docs define `analytics.getDashboard` and `analytics.getStudyHeatmap`. Quick win.
+
+**Plan:**
+
+- [ ] Write FAILING contract test: `analytics.contract.test.ts` — getDashboard returns shape, getStudyHeatmap returns date/minutes array
+- [ ] Create `packages/validators/src/analytics.ts` — getDashboardSchema, getStudyHeatmapSchema
+- [ ] Create `apps/web/src/server/routers/analytics.ts` — getDashboard (recent workspaces, study streak, total mastered), getStudyHeatmap (from learning_events)
+- [ ] Wire into `_app.ts`
+- [ ] Update `/analytics` page with real data (stats cards + heatmap grid)
+- [ ] Run `pnpm test:unit` + `pnpm typecheck`
+- [ ] Browser test: /analytics shows real stats
+
+### Task 8: Accessibility Audit (Phase 3C)
+
+**Why:** No axe audit has been done. Legal compliance + usability requirement.
+
+**Plan:**
+
+- [ ] Install `@axe-core/playwright`
+- [ ] Run axe on /dashboard, /workspace/[id], /study, /login
+- [ ] Fix all critical + serious violations (missing ARIA labels, focus management, contrast)
+- [ ] Add keyboard focus trap to all modals (CreateWorkspaceModal, etc.)
+- [ ] Verify `SkipLink` component works
+- [ ] Re-run axe — zero critical/serious violations
+- [ ] Browser test: tab through key flows, verify focus visible
+
+### Task 9: Eval Tooling (`tooling/eval/`)
+
+**Why:** Zero way to measure AI output quality. Need baseline metrics before any model/prompt changes.
+
+**Plan:**
+
+- [ ] Create `tooling/eval/` directory
+- [ ] Create `tooling/eval/lesson-rubric.ts` — pure function scoring: section diversity (min 5 types), takeaway presence, quiz placement, no back-to-back definitions
+- [ ] Write FAILING test for rubric scoring logic
+- [ ] Implement rubric → tests pass
+- [ ] Create `tooling/eval/run-lesson-eval.ts` — fetch lessons from DB, score each, report aggregate
+- [ ] Wire `pnpm eval:lessons` command
+- [ ] Run against ML101 lessons — record baseline scores
+- [ ] Run `pnpm typecheck`
+
+### Task 10: Langfuse Tracing
+
+**Why:** Observability client exists but is never wired in. Need multi-step traces for lesson generation + chat.
+
+**Plan:**
+
+- [ ] Read `apps/web/src/lib/ai/observability.ts` for existing client
+- [ ] Wire Langfuse trace into `/api/chat` route (span per retrieval + generation step)
+- [ ] Wire into `generate-lessons` job (trace per concept, span per embed + search + generate)
+- [ ] Verify traces appear in Langfuse dashboard (or log if no key configured)
+- [ ] Run `pnpm typecheck`
+
+---
+
+## Technical Debt — Tier 4 (Polish)
+
+### Task 11: Tooling Scripts
+
+**Plan:**
+
+- [ ] Create `tooling/scripts/db-seed.ts` — seed dev data (test user, workspace, document, concepts)
+- [ ] Wire `pnpm db:seed` command
+- [ ] Run `pnpm typecheck`
+
+---
+
 ### Phase 3 Verification Gate
 
 - [ ] `pnpm typecheck` — zero errors

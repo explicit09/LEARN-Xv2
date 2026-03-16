@@ -10,6 +10,7 @@ import { ProcessFlow } from './sections/ProcessFlow'
 import { QuoteBlock } from './sections/QuoteBlock'
 import { TextSection } from './sections/TextSection'
 import { Timeline } from './sections/Timeline'
+import { InteractiveWidget } from './sections/InteractiveWidget'
 
 interface LessonRendererProps {
   sections: LessonSection[]
@@ -17,7 +18,7 @@ interface LessonRendererProps {
 
 export function LessonRenderer({ sections }: LessonRendererProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {sections.map((section, i) => (
         <LessonSectionBlock key={i} section={section} />
       ))}
@@ -79,6 +80,14 @@ function LessonSectionBlock({ section }: { section: LessonSection }) {
           language={section.language}
           code={section.code}
           annotations={section.annotations}
+        />
+      )
+    case 'interactive_widget':
+      return (
+        <InteractiveWidget
+          title={section.title}
+          description={section.description}
+          html={section.html}
         />
       )
     default:

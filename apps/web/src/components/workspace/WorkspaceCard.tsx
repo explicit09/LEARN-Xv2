@@ -1,6 +1,4 @@
 import Link from 'next/link'
-import { Badge } from '@learn-x/ui'
-import { cn } from '@learn-x/utils'
 
 interface WorkspaceCardProps {
   id: string
@@ -12,12 +10,6 @@ interface WorkspaceCardProps {
   createdAt?: string | null
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  active: 'Active',
-  archived: 'Archived',
-  processing: 'Processing',
-}
-
 export function WorkspaceCard({
   id,
   name,
@@ -25,42 +17,47 @@ export function WorkspaceCard({
   status,
   totalTokenCount,
   updatedAt,
-  createdAt,
 }: WorkspaceCardProps) {
-  const dateStr = updatedAt ?? createdAt
-  const formattedDate = dateStr
-    ? new Date(dateStr).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
+  const isActive = status === 'active'
+  const lastUpdated = updatedAt
+    ? new Date(updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     : null
+  const tokenLabel =
+    totalTokenCount > 0
+      ? totalTokenCount > 1_000_000
+        ? `${(totalTokenCount / 1_000_000).toFixed(1)}M tokens`
+        : totalTokenCount > 1_000
+          ? `${Math.round(totalTokenCount / 1_000)}k tokens`
+          : `${totalTokenCount} tokens`
+      : null
 
   return (
     <Link
       href={`/workspace/${id}`}
-      className="group block rounded-lg border bg-card p-5 transition-colors hover:border-foreground/20 hover:bg-muted/50"
+      className="group block rounded-2xl glass-card p-5 transition-all hover:border-primary/50 relative overflow-hidden min-h-[120px]"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-medium">{name}</h3>
-          {description && (
-            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{description}</p>
-          )}
+      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl -mr-10 -mt-10 group-hover:bg-primary/10 transition-colors" />
+
+      <div className="relative z-10 flex flex-col h-full justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
+          <h3 className="font-bold text-lg leading-tight line-clamp-2">{name}</h3>
+          <div
+            className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full border ${
+              isActive
+                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
+                : 'bg-muted text-muted-foreground border-border'
+            }`}
+          >
+            {isActive ? 'Active' : status}
+          </div>
         </div>
-        <Badge variant={status === 'active' ? 'default' : 'secondary'} className="shrink-0">
-          {STATUS_LABELS[status] ?? status}
-        </Badge>
-      </div>
-      <div className="mt-3 flex items-center justify-between gap-2">
-        {totalTokenCount > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            {(totalTokenCount / 1000).toFixed(1)}k tokens ingested
-          </p>
-        ) : (
-          <span />
-        )}
-        {formattedDate && <p className="text-xs text-muted-foreground">Updated {formattedDate}</p>}
+
+        {description && <p className="text-sm text-muted-foreground line-clamp-2">{description}</p>}
+
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{tokenLabel ?? 'No content yet'}</span>
+          {lastUpdated && <span>Updated {lastUpdated}</span>}
+        </div>
       </div>
     </Link>
   )
