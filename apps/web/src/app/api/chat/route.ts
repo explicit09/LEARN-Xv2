@@ -14,7 +14,14 @@ const FULL_CONTEXT_TOKEN_THRESHOLD = 500_000
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { sessionId, message } = body as { sessionId: string; message: string }
+    // AI SDK useChat sends { messages: [{role, content},...], sessionId }
+    // Extract the last user message as the current turn
+    const { sessionId, messages: aiMessages } = body as {
+      sessionId: string
+      messages: { role: string; content: string }[]
+    }
+    const userMessages = (aiMessages ?? []).filter((m) => m.role === 'user')
+    const message = userMessages[userMessages.length - 1]?.content ?? ''
 
     if (!sessionId || !message?.trim()) {
       return NextResponse.json({ error: 'sessionId and message are required' }, { status: 400 })
@@ -53,13 +60,8 @@ export async function POST(req: NextRequest) {
       .single()
     if (!workspace) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-    // Load conversation history
-    const { data: historyRows } = await supabase
-      .from('chat_messages')
-      .select('role, content')
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true })
-    const history = (historyRows ?? []) as { role: string; content: string }[]
+    // Use the history from AI SDK payload (excludes the current message, which is appended below)
+    const history = (aiMessages ?? []).slice(0, -1) as { role: string; content: string }[]
 
     // Load persona (best-effort)
     const { data: personaData } = await supabase
