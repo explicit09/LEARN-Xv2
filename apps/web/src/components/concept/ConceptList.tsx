@@ -8,14 +8,13 @@ interface ConceptListProps {
 }
 
 export function ConceptList({ workspaceId }: ConceptListProps) {
+  // Poll while docs may be processing: check if any docs are still active
+  const { data: docs } = trpc.document.list.useQuery({ workspaceId })
+  const hasProcessing = docs?.some((d) => ['uploading', 'processing'].includes(d.status as string))
+
   const { data: concepts, isLoading } = trpc.concept.list.useQuery(
     { workspaceId },
-    {
-      refetchInterval: (query) => {
-        const data = query.state.data
-        return !data || data.length === 0 ? 5000 : false
-      },
-    },
+    { refetchInterval: hasProcessing ? 5000 : false },
   )
 
   if (isLoading) {

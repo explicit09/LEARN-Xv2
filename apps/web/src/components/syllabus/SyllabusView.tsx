@@ -10,14 +10,12 @@ interface SyllabusViewProps {
 }
 
 export function SyllabusView({ workspaceId, hasDocuments }: SyllabusViewProps) {
+  const { data: docs } = trpc.document.list.useQuery({ workspaceId })
+  const hasProcessing = docs?.some((d) => ['uploading', 'processing'].includes(d.status as string))
+
   const { data: syllabus, isLoading } = trpc.syllabus.get.useQuery(
     { workspaceId },
-    {
-      refetchInterval: (query) => {
-        const data = query.state.data
-        return !data || !data.units?.length ? 5000 : false
-      },
-    },
+    { refetchInterval: hasProcessing ? 5000 : false },
   )
   const [openUnits, setOpenUnits] = useState<Set<string>>(new Set())
 

@@ -10,19 +10,14 @@ interface LessonListProps {
 }
 
 export function LessonList({ workspaceId }: LessonListProps) {
+  const { data: docs } = trpc.document.list.useQuery({ workspaceId })
+  const hasProcessing = docs?.some((d) => ['uploading', 'processing'].includes(d.status as string))
+
   const {
     data: lessons,
     isLoading,
     refetch,
-  } = trpc.lesson.list.useQuery(
-    { workspaceId },
-    {
-      refetchInterval: (query) => {
-        const data = query.state.data
-        return !data || data.length === 0 ? 5000 : false
-      },
-    },
-  )
+  } = trpc.lesson.list.useQuery({ workspaceId }, { refetchInterval: hasProcessing ? 5000 : false })
   const triggerGenerate = trpc.lesson.triggerGenerate.useMutation({
     onSuccess: () => setTimeout(() => refetch(), 2000),
   })
