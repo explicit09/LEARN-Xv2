@@ -212,6 +212,23 @@ export const generateSyllabus = task({
     }
 
     logger.info('Syllabus generated', { workspaceId, units: totalUnits, version: nextVersion })
+
+    // ── Trigger lesson generation (best-effort) ──────────────────
+    try {
+      const { data: ws } = await supabase
+        .from('workspaces')
+        .select('user_id')
+        .eq('id', workspaceId)
+        .single()
+      if (ws?.user_id) {
+        const { generateLessons } = await import('./generate-lessons')
+        await generateLessons.trigger({ workspaceId, userId: ws.user_id as string })
+        logger.info('Triggered generate-lessons', { workspaceId })
+      }
+    } catch {
+      // best-effort — don't fail syllabus job if lesson trigger fails
+    }
+
     return { units: totalUnits }
   },
 })

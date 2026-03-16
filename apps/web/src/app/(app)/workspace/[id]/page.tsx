@@ -7,7 +7,7 @@ import { LessonList } from '@/components/lesson/LessonList'
 import { SyllabusView } from '@/components/syllabus/SyllabusView'
 import { MasteryDashboard } from '@/components/mastery/MasteryDashboard'
 import { createServerCaller } from '@/lib/trpc/server'
-import { BookOpen, Map, GraduationCap, Flame, Sparkles, BrainCircuit, ActivitySquare } from 'lucide-react'
+import { BookOpen, Map, GraduationCap, Flame, Sparkles, BrainCircuit, ActivitySquare, Layers } from 'lucide-react'
 import { Button } from '@learn-x/ui'
 
 interface WorkspacePageProps {
@@ -23,6 +23,7 @@ const TABS = [
   { key: 'mastery', label: 'Mastery', icon: ActivitySquare },
   { key: 'chat', label: 'AI Chat', icon: Sparkles },
   { key: 'quiz', label: 'Quizzes', icon: Flame },
+  { key: 'flashcards', label: 'Flashcards', icon: Layers },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key'] | 'exam' | 'graph' | 'flashcards'
@@ -32,7 +33,7 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
   const { tab } = await searchParams
   
   // Cast to the expanded TabKey type to allow checking for redirect pages
-  const activeTab: TabKey = tab as TabKey || 'mastery'
+  const activeTab: TabKey = tab as TabKey || 'documents'
 
   const caller = await createServerCaller()
 

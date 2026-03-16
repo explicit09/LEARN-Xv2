@@ -74,3 +74,52 @@ Login, Register, Onboarding, Dashboard, Workspace Detail (all 8 tabs), Chat, Qui
 ### Theme system
 
 Auth pages are permanently dark (hardcoded panel backgrounds). App pages follow light/dark/auto via CSS custom properties. ThemeToggle component (Light | System | Dark) available for manual override.
+
+---
+
+## UI/UX Review — Phase 0-1G (2026-03-16, second pass)
+
+### Screens reviewed
+
+Login, Dashboard, Workspace Detail (all 8 tabs), Lesson Reader, Chat, Quizzes, Flashcards, Mastery
+
+### Blocking deviations fixed
+
+1. **Flashcards tab missing from workspace** — TABS array in workspace page only had 7 entries. Added Flashcards tab with Layers icon.
+2. **Default tab was Mastery** — Workspace page defaulted to `mastery` tab. Changed to `documents` (first tab, most logical default).
+3. **Document pipeline broken** — Reducto API URL wrong (`v2.reductoai.com` → `platform.reducto.ai`), two-step upload flow fixed, env vars added to trigger/.env.
+4. **Lessons never auto-generated** — `generate-syllabus` job never chained to `generate-lessons`. Added trigger at end of syllabus job.
+5. **generate-lessons extremely slow and unreliable** — Zero-filled embedding vector (70% weight on garbage), no retries, sequential processing. Fixed: real OpenAI embeddings, batch-parallel (7 concurrent), retry logic, switched to Claude Haiku (60s → 1s per concept). Result: 14/14 lessons in 60s (was 2/14 in 14 min).
+6. **Dashboard "New Workspace" button non-functional** — Was a plain `<div>`. Replaced with `<CreateWorkspaceModal />`.
+7. **DocumentList no real-time updates** — Required manual refresh. Added `refetchInterval` polling every 3s while docs are processing.
+
+### Non-blocking deviations logged
+
+- Login form missing "Forgot password?" link and "Terms of Service" footer vs Paper spec [severity: low]
+- Login form card has no visible border vs Paper spec border [severity: low]
+- Dashboard workspace cards show "No content yet" instead of mastery/lesson counts — data-dependent [severity: low]
+- Sidebar missing user profile at bottom (shows "Sign out" instead) [severity: low]
+- Paper spec shows dark theme, live app defaults to light — both work [severity: low]
+
+### Playwright journeys
+
+1. Auth login → dashboard ✓
+2. Workspace detail — all 8 tabs visible (Documents, Concepts, Syllabus, Lessons, Mastery, AI Chat, Quizzes, Flashcards) ✓
+3. Documents tab — upload dropzone + document list with READY status ✓
+4. Concepts tab — 14 concepts with descriptions and tags ✓
+5. Lessons tab — 14 lessons with progress bar (0/14), titles and summaries ✓
+6. Lesson Reader — renders text, concept_definition, analogy_card, process_flow, mini_quiz, comparison_table, timeline, concept_bridge, key_takeaway sections. Mark Complete + Next Lesson buttons. ✓
+7. Chat — AI Coach interface with sources panel, message input ✓
+8. Quizzes — empty state with "Generate Quizzes" button ✓
+9. Flashcards — "Due for Review" + "All Sets" sections with empty states ✓
+10. Mastery — stats grid (14 concepts, 0 mastered, 0 struggling, 0 due), Up Next + Struggling Concepts sections ✓
+
+### Pipeline fixes
+
+- `trigger/src/jobs/process-document.ts` — Reducto two-step upload/parse flow
+- `trigger/src/jobs/generate-syllabus.ts` — Chain to generate-lessons
+- `trigger/src/jobs/generate-lessons.ts` — Real embeddings, batch-parallel, Haiku model, retries
+- `trigger/src/lib/ai.ts` — LESSON_GENERATION model → claude-haiku-4-5
+- `apps/web/src/components/document/DocumentList.tsx` — Auto-polling
+- `apps/web/src/app/(app)/dashboard/page.tsx` — CreateWorkspaceModal
+- `apps/web/src/app/(app)/workspace/[id]/page.tsx` — Flashcards tab, default to documents

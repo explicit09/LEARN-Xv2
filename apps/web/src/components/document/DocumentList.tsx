@@ -22,7 +22,19 @@ const STATUS_CONFIG: Record<string, { color: string, icon: React.ElementType }> 
 }
 
 export function DocumentList({ workspaceId }: DocumentListProps) {
-  const { data: documents, isLoading } = trpc.document.list.useQuery({ workspaceId })
+  const { data: documents, isLoading } = trpc.document.list.useQuery(
+    { workspaceId },
+    {
+      // Poll every 3s while any document is still processing/uploading
+      refetchInterval: (query) => {
+        const docs = query.state.data
+        const hasActive = docs?.some((d) =>
+          ['uploading', 'processing'].includes(d.status as string),
+        )
+        return hasActive ? 3000 : false
+      },
+    },
+  )
 
   if (isLoading) {
     return (

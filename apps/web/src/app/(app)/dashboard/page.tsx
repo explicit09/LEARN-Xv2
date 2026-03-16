@@ -10,7 +10,6 @@ import {
   Clock,
   BookOpen,
   Sparkles,
-  Plus,
 } from 'lucide-react'
 import { Button } from '@learn-x/ui'
 import {
@@ -250,16 +249,7 @@ export default async function DashboardPage() {
                       createdAt={ws.created_at as string | null}
                     />
                   ))}
-                  <div className="glass-card rounded-2xl border border-dashed border-border hover:border-primary/50 transition-colors flex items-center justify-center min-h-[140px] cursor-pointer group">
-                    <div className="text-center group-hover:-translate-y-1 transition-transform">
-                      <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mx-auto mb-2 group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                        <Plus className="w-5 h-5" />
-                      </div>
-                      <span className="font-medium text-sm text-muted-foreground group-hover:text-foreground">
-                        New Workspace
-                      </span>
-                    </div>
-                  </div>
+                  <CreateWorkspaceModal />
                 </div>
               )}
             </div>
