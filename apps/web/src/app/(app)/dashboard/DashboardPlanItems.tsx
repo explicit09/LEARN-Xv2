@@ -3,13 +3,7 @@ import { BookOpen, AlertCircle, Brain, Calendar } from 'lucide-react'
 import { Button } from '@learn-x/ui'
 import { CreateWorkspaceModal } from '@/components/workspace/CreateWorkspaceModal'
 
-const ITEM_COLORS = [
-  'bg-primary',
-  'bg-purple-500',
-  'bg-yellow-500',
-  'bg-emerald-500',
-  'bg-red-500',
-]
+const ITEM_COLORS = ['bg-primary', 'bg-purple-500', 'bg-yellow-500', 'bg-emerald-500', 'bg-red-500']
 
 export function StudyPlanItem({ item }: { item: PlanItem }) {
   const isFlashcard = item.type === 'flashcard_review'
@@ -25,9 +19,7 @@ export function StudyPlanItem({ item }: { item: PlanItem }) {
   const accentClass = isFlashcard
     ? 'bg-red-500/5 border-red-500/10 hover:border-red-500/30'
     : 'bg-card border-border hover:border-primary/30'
-  const labelClass = isFlashcard
-    ? 'bg-red-500 text-white'
-    : 'bg-primary/20 text-primary border border-primary/20'
+  const labelClass = isFlashcard ? 'bg-red-500 text-white' : 'bg-primary text-primary-foreground'
   const barClass = isFlashcard ? 'bg-red-500' : 'bg-primary'
   const Icon = isLesson ? BookOpen : isFlashcard ? AlertCircle : Brain
 
@@ -90,7 +82,7 @@ export function DueTodayItem({ item, index }: { item: PlanItem; index: number })
           <p className="text-xs text-muted-foreground">{subLabel}</p>
         </div>
       </div>
-      <span className="text-xs font-bold text-red-500/90">~{item.estimatedMinutes} min</span>
+      <span className="text-xs font-bold text-foreground/60">~{item.estimatedMinutes} min</span>
     </div>
   )
 }
@@ -98,7 +90,7 @@ export function DueTodayItem({ item, index }: { item: PlanItem; index: number })
 export function LearningEngineEmpty({ hasWorkspaces }: { hasWorkspaces: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-10 text-center gap-3">
-      <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+      <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-700 dark:text-emerald-400">
         <Brain className="w-6 h-6" />
       </div>
       <div>
