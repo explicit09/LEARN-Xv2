@@ -1,0 +1,13 @@
+{
+  "name": "@learn-x/eval",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "test:unit": "vitest run",
+    "eval:lessons": "tsx run-lesson-eval.ts"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.9",
+    "tsx": "^4.19.0"
+  }
+}
