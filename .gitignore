@@ -37,6 +37,17 @@ coverage/
 # Misc
 *.tsbuildinfo
 
+# Claude Code local state
+.claude/scheduled_tasks.lock
+apps/web/.claude/
+
+# Trigger.dev local dev state
+trigger/.trigger/
+
+# Test files
+test-ml-document.txt
+apps/web/public/test.pdf
+
 # Playwright MCP (contains browser session data)
 .playwright-mcp/
 
