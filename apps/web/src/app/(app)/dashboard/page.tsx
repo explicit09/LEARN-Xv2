@@ -4,13 +4,7 @@ import { WorkspaceCard } from '@/components/workspace/WorkspaceCard'
 import { CreateWorkspaceModal } from '@/components/workspace/CreateWorkspaceModal'
 import { createServerCaller } from '@/lib/trpc/server'
 import type { PlanItem } from '@/server/routers/studyPlan'
-import {
-  CheckCircle,
-  Star,
-  Clock,
-  BookOpen,
-  Sparkles,
-} from 'lucide-react'
+import { CheckCircle, Star, Clock, BookOpen, Sparkles } from 'lucide-react'
 import { Button } from '@learn-x/ui'
 import {
   StudyPlanItem,
@@ -52,13 +46,8 @@ export default async function DashboardPage() {
   const hasWorkspaces = workspaces.length > 0
   const greeting = getGreeting()
 
-  const dueCardCount = studyPlan.items.filter(
-    (item) => item.type === 'flashcard_review',
-  ).length
-  const totalMinutes = studyPlan.items.reduce(
-    (sum, item) => sum + (item.estimatedMinutes ?? 0),
-    0,
-  )
+  const dueCardCount = studyPlan.items.filter((item) => item.type === 'flashcard_review').length
+  const totalMinutes = studyPlan.items.reduce((sum, item) => sum + (item.estimatedMinutes ?? 0), 0)
   const pendingItems = studyPlan.items.filter((item) => !item.completed)
   const completedCount = studyPlan.items.length - pendingItems.length
 
@@ -66,7 +55,6 @@ export default async function DashboardPage() {
     <>
       <Topbar title="Dashboard" actions={<CreateWorkspaceModal />} />
       <div className="flex-1 overflow-auto p-4 md:p-8 flex flex-col gap-8 max-w-[1400px] mx-auto w-full">
-
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-4">
           <div>
@@ -111,9 +99,13 @@ export default async function DashboardPage() {
                   <span className="text-muted-foreground text-sm font-medium">cards due</span>
                 </div>
                 {dueCardCount === 0 ? (
-                  <div className="text-emerald-500 text-xs font-semibold mt-0.5">All caught up!</div>
+                  <div className="text-emerald-700 dark:text-emerald-400 text-xs font-semibold mt-0.5">
+                    All caught up!
+                  </div>
                 ) : (
-                  <div className="text-muted-foreground text-xs mt-0.5">Today&apos;s review queue</div>
+                  <div className="text-muted-foreground text-xs mt-0.5">
+                    Today&apos;s review queue
+                  </div>
                 )}
               </div>
             </div>
@@ -122,7 +114,7 @@ export default async function DashboardPage() {
           <div className="glass-card rounded-2xl p-5 flex flex-col justify-center border-t border-t-white/10 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -mr-10 -mt-10 transition-transform group-hover:scale-150 duration-700" />
             <div className="flex items-center gap-4 relative z-10">
-              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-500">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-700 dark:text-emerald-400">
                 <CheckCircle className="w-5 h-5" />
               </div>
               <div>
@@ -174,10 +166,8 @@ export default async function DashboardPage() {
 
         {/* Main Content Grid */}
         <div className="grid lg:grid-cols-[1fr_380px] gap-6 mt-4">
-
           {/* Left Column */}
           <div className="space-y-6">
-
             {/* Learning Engine */}
             <div className="glass-card rounded-3xl border border-border p-5 md:p-6 overflow-hidden">
               <div className="flex items-center justify-between mb-6">
@@ -188,7 +178,7 @@ export default async function DashboardPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-lg font-bold">Learning Engine</h2>
-                      <span className="bg-emerald-500/10 text-emerald-500 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-sm border border-emerald-500/20">
+                      <span className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-sm border border-emerald-500/20">
                         {greeting}
                       </span>
                     </div>
@@ -257,7 +247,6 @@ export default async function DashboardPage() {
 
           {/* Right Column */}
           <div className="space-y-6">
-
             {/* Coach Panel */}
             <div className="glass-card rounded-3xl border border-border p-5">
               <div className="flex items-center gap-3 mb-6">
@@ -277,8 +266,8 @@ export default async function DashboardPage() {
                   </p>
                   <h4 className="text-xl font-bold mb-2">Upload your first document</h4>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    Create a workspace and upload your course materials to get personalized coaching,
-                    flashcards, and a study plan tailored to you.
+                    Create a workspace and upload your course materials to get personalized
+                    coaching, flashcards, and a study plan tailored to you.
                   </p>
                 </div>
               ) : dueCardCount > 0 ? (
@@ -297,12 +286,14 @@ export default async function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-2xl bg-emerald-950/40 border border-emerald-500/20 p-4 mb-4">
-                  <p className="text-[10px] font-bold tracking-wider text-emerald-500 uppercase mb-1">
+                <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-500/20 p-4 mb-4">
+                  <p className="text-[10px] font-bold tracking-wider text-emerald-700 dark:text-emerald-400 uppercase mb-1">
                     On track
                   </p>
-                  <h4 className="text-xl font-bold text-emerald-50 mb-2">Nothing due today</h4>
-                  <p className="text-sm text-emerald-200/70 leading-relaxed">
+                  <h4 className="text-xl font-bold text-emerald-900 dark:text-emerald-50 mb-2">
+                    Nothing due today
+                  </h4>
+                  <p className="text-sm text-emerald-700 dark:text-emerald-300 leading-relaxed">
                     You&apos;re ahead of your schedule. Consider reviewing a new lesson.
                   </p>
                 </div>
@@ -328,7 +319,7 @@ export default async function DashboardPage() {
                 {pendingItems.length > 0 && (
                   <Button
                     size="sm"
-                    className="h-8 text-xs font-semibold rounded-lg bg-primary/20 text-primary hover:bg-primary/30 border border-primary/20 shadow-none"
+                    className="h-8 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-none"
                   >
                     Study Now
                   </Button>
