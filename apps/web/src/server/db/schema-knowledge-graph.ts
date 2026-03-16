@@ -30,7 +30,5 @@ export const conceptRelationsGlobal = pgTable(
     }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    unique().on(table.sourceConceptId, table.targetConceptId, table.relationType),
-  ],
+  (table) => [unique().on(table.sourceConceptId, table.targetConceptId, table.relationType)],
 )
