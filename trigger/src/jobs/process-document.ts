@@ -159,16 +159,35 @@ export const processDocument = task({
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 async function parseWithReducto(fileBlob: Blob, title: string): Promise<string> {
-  const formData = new FormData()
-  formData.append('file', fileBlob, `${title}.pdf`)
-  const res = await fetch('https://v2.reductoai.com/parse', {
+  // Step 1: Upload file to get a reducto:// file_id
+  const uploadForm = new FormData()
+  uploadForm.append('file', fileBlob, `${title}.pdf`)
+  const uploadRes = await fetch('https://platform.reducto.ai/upload', {
     method: 'POST',
     headers: { Authorization: `Bearer ${REDUCTO_API_KEY}` },
-    body: formData,
+    body: uploadForm,
   })
-  if (!res.ok) throw new Error(`Reducto parse failed: ${res.statusText}`)
-  const json = (await res.json()) as { result?: { text?: string }; text?: string }
-  return json.result?.text ?? json.text ?? ''
+  if (!uploadRes.ok) throw new Error(`Reducto upload failed: ${uploadRes.statusText}`)
+  const { file_id } = (await uploadRes.json()) as { file_id: string }
+
+  // Step 2: Parse using the file_id
+  const parseRes = await fetch('https://platform.reducto.ai/parse', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${REDUCTO_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ input: file_id }),
+  })
+  if (!parseRes.ok) throw new Error(`Reducto parse failed: ${parseRes.statusText}`)
+
+  // Response: { chunks: [{ content: string }] } or { result: { chunks: [{ content }] } }
+  const json = (await parseRes.json()) as {
+    chunks?: { content: string }[]
+    result?: { chunks?: { content: string }[] }
+  }
+  const chunks = json.chunks ?? json.result?.chunks ?? []
+  return chunks.map((c) => c.content).join('\n\n')
 }
 
 interface EnrichedChunk {
