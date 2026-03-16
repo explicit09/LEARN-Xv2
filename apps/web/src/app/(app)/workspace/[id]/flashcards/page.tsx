@@ -41,7 +41,7 @@ export default async function FlashcardsPage({ params }: Props) {
           </div>
           <FlashcardReview workspaceId={id} />
         </section>
-        
+
         <section className="glass-card rounded-3xl border border-border/50 p-6 md:p-8 shadow-sm h-fit">
           <div className="flex items-center gap-3 mb-6">
              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-inner">

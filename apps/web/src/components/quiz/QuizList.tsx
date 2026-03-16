@@ -56,7 +56,7 @@ export function QuizList({ workspaceId }: QuizListProps) {
 
   return (
     <div className="space-y-6">
-      
+
       {/* Header Actions */}
       <div className="flex items-center justify-between glass-card p-4 rounded-2xl border border-border/50">
         <div className="flex items-center gap-3">
@@ -70,7 +70,7 @@ export function QuizList({ workspaceId }: QuizListProps) {
              </p>
            </div>
         </div>
-        
+
         <Button
           onClick={() => generate.mutate({ workspaceId })}
           disabled={generate.isPending}
@@ -81,12 +81,10 @@ export function QuizList({ workspaceId }: QuizListProps) {
           <Sparkles className="ml-2 w-4 h-4 text-orange-500" />
         </Button>
       </div>
-      
+
       {generate.isSuccess && (
         <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20 w-fit">Generation started. Check back shortly.</p>
       )}
-
-      {/* List */}
       <div className="space-y-3">
         {quizzes.map((quiz) => (
           <Link

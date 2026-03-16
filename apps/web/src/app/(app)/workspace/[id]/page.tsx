@@ -121,7 +121,7 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
           {activeTab === 'syllabus' && <SyllabusView workspaceId={id} hasDocuments={hasDocuments} />}
           {activeTab === 'lessons' && <LessonList workspaceId={id} />}
           {activeTab === 'mastery' && <MasteryDashboard workspaceId={id} />}
-          
+
           {/* Flashcards generic view fallback */}
           {activeTab === 'flashcards' && (
              <div className="flex flex-col items-center justify-center min-h-[400px] text-center glass-card rounded-3xl border border-border/50">
@@ -138,7 +138,6 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
              </div>
           )}
         </div>
-        
       </div>
     </>
   )
