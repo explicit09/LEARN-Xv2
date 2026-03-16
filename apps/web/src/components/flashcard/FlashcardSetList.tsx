@@ -8,7 +8,11 @@ interface FlashcardSetListProps {
 }
 
 export function FlashcardSetList({ workspaceId }: FlashcardSetListProps) {
+  const utils = trpc.useUtils()
   const { data: sets, isLoading } = trpc.flashcard.listSets.useQuery({ workspaceId })
+  const generate = trpc.flashcard.generate.useMutation({
+    onSuccess: () => void utils.flashcard.listSets.invalidate({ workspaceId }),
+  })
 
   if (isLoading) {
     return (
@@ -24,9 +28,21 @@ export function FlashcardSetList({ workspaceId }: FlashcardSetListProps) {
     return (
       <div className="py-12 text-center text-gray-500">
         <p className="text-sm">No flashcard sets yet.</p>
-        <p className="mt-1 text-xs text-gray-400">
-          Flashcards are generated automatically after document processing.
+        <p className="mt-1 text-xs text-gray-400 mb-4">
+          Generate flashcards from your lessons and concepts.
         </p>
+        <button
+          onClick={() => generate.mutate({ workspaceId })}
+          disabled={generate.isPending}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {generate.isPending ? 'Starting…' : 'Generate Flashcards'}
+        </button>
+        {generate.isSuccess && (
+          <p className="mt-2 text-xs text-green-600">
+            Flashcard generation started. Check back shortly.
+          </p>
+        )}
       </div>
     )
   }
