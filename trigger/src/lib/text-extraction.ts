@@ -4,22 +4,28 @@ import { generateText } from 'ai'
 const MIN_TEXT_LENGTH = 50
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY
 
+export interface ExtractionResult {
+  text: string
+  /** Per-page text for PDFs and per-slide text for PPTX. null for flat formats. */
+  pages: string[] | null
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /** Extract text from any supported file type. */
-export async function extractText(blob: Blob, fileType: string): Promise<string> {
+export async function extractText(blob: Blob, fileType: string): Promise<ExtractionResult> {
   switch (fileType) {
     case 'pdf':
       return extractPdfText(blob)
     case 'docx':
-      return extractDocxText(blob)
+      return { text: await extractDocxText(blob), pages: null }
     case 'pptx':
       return extractPptxText(blob)
     case 'html':
-      return extractHtmlText(blob)
+      return { text: await extractHtmlText(blob), pages: null }
     case 'txt':
     case 'md':
-      return blob.text()
+      return { text: await blob.text(), pages: null }
     default:
       throw new Error(`Unsupported file type: ${fileType}`)
   }
@@ -27,25 +33,28 @@ export async function extractText(blob: Blob, fileType: string): Promise<string>
 
 // ── PDF ──────────────────────────────────────────────────────────────────────
 
-async function extractPdfText(blob: Blob): Promise<string> {
-  const text = await extractWithUnpdf(blob)
-  if (text.length >= MIN_TEXT_LENGTH) {
-    logger.info('PDF parsed with unpdf', { textLength: text.length })
-    return text
+async function extractPdfText(blob: Blob): Promise<ExtractionResult> {
+  const { pages, combined } = await extractWithUnpdf(blob)
+  if (combined.length >= MIN_TEXT_LENGTH) {
+    logger.info('PDF parsed with unpdf', { textLength: combined.length, pages: pages.length })
+    return { text: combined, pages }
   }
-  logger.info('unpdf extracted little text, falling back to Gemini', { textLength: text.length })
+  logger.info('unpdf extracted little text, falling back to Gemini', {
+    textLength: combined.length,
+  })
   if (!GOOGLE_API_KEY) {
     throw new Error('PDF appears scanned and GOOGLE_API_KEY is not set for OCR fallback.')
   }
-  return extractWithGemini(blob)
+  const text = await extractWithGemini(blob)
+  return { text, pages: null } // Gemini returns flat text, no page boundaries
 }
 
-async function extractWithUnpdf(blob: Blob): Promise<string> {
+async function extractWithUnpdf(blob: Blob): Promise<{ pages: string[]; combined: string }> {
   const { extractText: extract } = await import('unpdf')
   const buffer = await blob.arrayBuffer()
   const { text, totalPages } = await extract(new Uint8Array(buffer))
   logger.info('unpdf extraction', { totalPages, pageCount: text.length })
-  return text.join('\n\n').trim()
+  return { pages: text, combined: text.join('\n\n').trim() }
 }
 
 async function extractWithGemini(blob: Blob): Promise<string> {
@@ -89,7 +98,7 @@ async function extractDocxText(blob: Blob): Promise<string> {
 
 // ── PPTX ─────────────────────────────────────────────────────────────────────
 
-async function extractPptxText(blob: Blob): Promise<string> {
+async function extractPptxText(blob: Blob): Promise<ExtractionResult> {
   const JSZip = (await import('jszip')).default
   const buffer = await blob.arrayBuffer()
   const zip = await JSZip.loadAsync(buffer)
@@ -150,7 +159,13 @@ async function extractPptxText(blob: Blob): Promise<string> {
       `PPTX produced too little text (${combined.length} chars). Slides may be image-only.`,
     )
   }
-  return combined
+  // Each slide becomes a "page" for citation purposes
+  const slidePages = slideTexts.map((slide, i) => {
+    const note = noteTexts[i]
+    return note ? `${slide}\n\n${note}` : slide
+  })
+
+  return { text: combined, pages: slidePages }
 }
 
 // ── HTML ─────────────────────────────────────────────────────────────────────

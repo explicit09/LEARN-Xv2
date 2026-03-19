@@ -109,14 +109,15 @@ export async function POST(req: NextRequest) {
       if (chunkIds.length > 0) {
         const { data: chunks } = await supabase
           .from('chunks')
-          .select('content, section_heading, chunk_index')
+          .select('content, enriched_content, section_heading, page_number, chunk_index')
           .in('id', chunkIds)
           .order('chunk_index', { ascending: true })
           .limit(20)
 
         sourceChunks = (chunks ?? []).map((c) => ({
-          content: c.content as string,
+          content: (c.enriched_content as string) || (c.content as string),
           ...(c.section_heading ? { sectionHeading: c.section_heading as string } : {}),
+          ...(c.page_number ? { pageNumber: c.page_number as number } : {}),
         }))
       }
     }

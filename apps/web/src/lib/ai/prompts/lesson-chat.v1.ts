@@ -6,7 +6,7 @@ export const LESSON_CHAT_PROMPT_VERSION = 'lesson-chat.v1'
 export interface LessonChatPromptParams {
   lessonTitle: string
   lessonSectionsJson: string
-  sourceChunks: { content: string; sectionHeading?: string }[]
+  sourceChunks: { content: string; sectionHeading?: string; pageNumber?: number }[]
   persona?: PersonaContext | undefined
   domainInstructions?: string | undefined
 }
@@ -30,10 +30,16 @@ Use their interest domains for analogies where natural.
   const chunksSection =
     sourceChunks.length > 0
       ? sourceChunks
-          .map(
-            (c, i) =>
-              `[Chunk ${i + 1}${c.sectionHeading ? ` — ${c.sectionHeading}` : ''}]\n${c.content}`,
-          )
+          .map((c, i) => {
+            const label = [
+              `Chunk ${i + 1}`,
+              c.sectionHeading ?? null,
+              c.pageNumber ? `p.${c.pageNumber}` : null,
+            ]
+              .filter(Boolean)
+              .join(' — ')
+            return `[${label}]\n${c.content}`
+          })
           .join('\n\n')
       : ''
 
