@@ -1,14 +1,11 @@
 import { task, logger } from '@trigger.dev/sdk/v3'
 import { createClient } from '@supabase/supabase-js'
-import { generateObject } from 'ai'
+import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
 import { anthropic, MODEL_ROUTES } from '../lib/ai'
 import { deduplicateConcepts, normalizeConceptName } from '../lib/concept-utils'
-import {
-  buildExtractConceptsPrompt,
-  PROMPT_VERSION,
-} from '../lib/prompts/extract-concepts.v1'
+import { buildExtractConceptsPrompt, PROMPT_VERSION } from '../lib/prompts/extract-concepts.v1'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -51,13 +48,17 @@ export const extractConcepts = task({
     // ── 1. Fetch workspace name ───────────────────────────────
     const { data: workspace, error: wsError } = await supabase
       .from('workspaces')
-      .select('name')
+      .select('name, settings')
       .eq('id', workspaceId)
       .single()
     if (wsError || !workspace) {
       logger.error('Workspace not found', { workspaceId })
       return { concepts: 0 }
     }
+
+    const wsSettings = (workspace.settings as Record<string, unknown>) ?? {}
+    const detectedDomain = wsSettings.primaryDomain as string | undefined
+    const detectedSubfield = wsSettings.subfield as string | undefined
 
     // ── 2. Sample up to 50 chunks (most recent) ───────────────
     const { data: chunks } = await supabase
@@ -78,21 +79,26 @@ export const extractConcepts = task({
 
     // ── 3. Call LLM via Vercel AI SDK ─────────────────────────
     const MODEL = MODEL_ROUTES.CONCEPT_EXTRACTION
-    const prompt = buildExtractConceptsPrompt(chunkTexts, workspace.name as string)
+    const prompt = buildExtractConceptsPrompt(
+      chunkTexts,
+      workspace.name as string,
+      detectedDomain,
+      detectedSubfield,
+    )
     const start = Date.now()
 
     let extraction: z.infer<typeof extractionSchema>
-    let usage = { promptTokens: 0, completionTokens: 0 }
+    let usage = { inputTokens: 0, outputTokens: 0 }
     try {
-      const result = await generateObject({
+      const result = await generateText({
         model: anthropic(MODEL),
-        schema: extractionSchema,
+        output: Output.object({ schema: extractionSchema }),
         prompt,
       })
-      extraction = result.object
+      extraction = result.output
       usage = {
-        promptTokens: result.usage.promptTokens,
-        completionTokens: result.usage.completionTokens,
+        inputTokens: result.usage.inputTokens ?? 0,
+        outputTokens: result.usage.outputTokens ?? 0,
       }
     } catch (err) {
       logger.error('LLM call failed', { error: String(err) })
@@ -104,18 +110,15 @@ export const extractConcepts = task({
       workspace_id: workspaceId,
       model: MODEL,
       provider: 'anthropic',
-      prompt_tokens: usage.promptTokens,
-      completion_tokens: usage.completionTokens,
-      cost_usd:
-        usage.promptTokens * 0.000003 + usage.completionTokens * 0.000015,
+      prompt_tokens: usage.inputTokens,
+      completion_tokens: usage.outputTokens,
+      cost_usd: (usage.inputTokens ?? 0) * 0.000003 + (usage.outputTokens ?? 0) * 0.000015,
       latency_ms: Date.now() - start,
       task_name: 'extract-concepts',
       prompt_version: PROMPT_VERSION,
     })
 
-    const rawConcepts = extraction.concepts.filter(
-      (c) => c.name && typeof c.name === 'string',
-    )
+    const rawConcepts = extraction.concepts.filter((c) => c.name && typeof c.name === 'string')
 
     if (rawConcepts.length === 0) {
       logger.info('No concepts extracted', { workspaceId })
