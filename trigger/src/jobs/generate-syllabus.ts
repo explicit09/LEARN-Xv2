@@ -1,13 +1,10 @@
 import { task, logger } from '@trigger.dev/sdk/v3'
 import { createClient } from '@supabase/supabase-js'
-import { generateObject } from 'ai'
+import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
 import { anthropic, MODEL_ROUTES } from '../lib/ai'
-import {
-  buildGenerateSyllabusPrompt,
-  PROMPT_VERSION,
-} from '../lib/prompts/generate-syllabus.v1'
+import { buildGenerateSyllabusPrompt, PROMPT_VERSION } from '../lib/prompts/generate-syllabus.v1'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -97,17 +94,17 @@ export const generateSyllabus = task({
     const start = Date.now()
 
     let syllabusResult: z.infer<typeof syllabusSchema>
-    let usage = { promptTokens: 0, completionTokens: 0 }
+    let usage = { inputTokens: 0, outputTokens: 0 }
     try {
-      const result = await generateObject({
+      const result = await generateText({
         model: anthropic(MODEL),
-        schema: syllabusSchema,
+        output: Output.object({ schema: syllabusSchema }),
         prompt,
       })
-      syllabusResult = result.object
+      syllabusResult = result.output
       usage = {
-        promptTokens: result.usage.promptTokens,
-        completionTokens: result.usage.completionTokens,
+        inputTokens: result.usage.inputTokens ?? 0,
+        outputTokens: result.usage.outputTokens ?? 0,
       }
     } catch (err) {
       logger.error('LLM call failed', { error: String(err) })
@@ -119,10 +116,9 @@ export const generateSyllabus = task({
       workspace_id: workspaceId,
       model: MODEL,
       provider: 'anthropic',
-      prompt_tokens: usage.promptTokens,
-      completion_tokens: usage.completionTokens,
-      cost_usd:
-        usage.promptTokens * 0.000003 + usage.completionTokens * 0.000015,
+      prompt_tokens: usage.inputTokens,
+      completion_tokens: usage.outputTokens,
+      cost_usd: (usage.inputTokens ?? 0) * 0.000003 + (usage.outputTokens ?? 0) * 0.000015,
       latency_ms: Date.now() - start,
       task_name: 'generate-syllabus',
       prompt_version: PROMPT_VERSION,

@@ -7,8 +7,10 @@ import { MAX_FILE_SIZE_BYTES } from '@learn-x/validators'
 const ACCEPTED_TYPES: Record<string, string> = {
   'application/pdf': 'pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
   'text/plain': 'txt',
   'text/markdown': 'md',
+  'text/html': 'html',
 }
 
 interface UploadDropzoneProps {
@@ -30,7 +32,7 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
       setError(null)
       const fileType = ACCEPTED_TYPES[file.type]
       if (!fileType) {
-        setError('Unsupported file type. Please upload a PDF, DOCX, TXT, or MD file.')
+        setError('Unsupported file type. Please upload a PDF, DOCX, PPTX, TXT, MD, or HTML file.')
         return
       }
       if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -43,7 +45,7 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
         const result = await initiate.mutateAsync({
           workspaceId,
           title: file.name.replace(/\.[^.]+$/, ''),
-          fileType: fileType as 'pdf' | 'docx' | 'txt' | 'md',
+          fileType: fileType as 'pdf' | 'docx' | 'pptx' | 'txt' | 'md' | 'html',
           fileSizeBytes: file.size,
         })
 
@@ -100,7 +102,9 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
         disabled={uploading}
         className={[
           'flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-10 transition-colors',
-          isDragging ? 'border-foreground bg-muted' : 'border-border hover:border-muted-foreground hover:bg-muted/50',
+          isDragging
+            ? 'border-foreground bg-muted'
+            : 'border-border hover:border-muted-foreground hover:bg-muted/50',
           uploading ? 'cursor-not-allowed opacity-60' : '',
         ].join(' ')}
       >
@@ -130,7 +134,7 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.docx,.txt,.md"
+        accept=".pdf,.docx,.pptx,.txt,.md,.html,.htm"
         className="hidden"
         onChange={handleFileChange}
       />

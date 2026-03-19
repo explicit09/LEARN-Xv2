@@ -104,7 +104,7 @@
     @apply bg-background/60 border-white/5 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.3)];
   }
   .dark .glass-card {
-    @apply bg-card/60 border-white/5 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.4)];
+    @apply bg-card/80 border-white/10 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.5)];
   }
 
   .text-gradient {

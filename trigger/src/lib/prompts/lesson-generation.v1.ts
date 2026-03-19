@@ -21,7 +21,7 @@ Available component types:
 - quote_block: primary source material, original definitions, notable quotes.
 - timeline: historical sequences, process evolution, discovery chronology.
 - concept_bridge: linking this concept to a prerequisite or next concept. Use at end of lesson to show where this fits in the learning path.
-- code_explainer: code examples, algorithms, syntax.
+- code_explainer: code examples, algorithms, syntax. ONLY use when the concept actually involves programming or computation. Do NOT add Python/R code to non-CS subjects unless the source material does.
 - interactive_widget: a LIVE interactive HTML/CSS/JS widget embedded in the lesson. The student can manipulate sliders, click buttons, see graphs move, explore visually. Use this for any concept where playing with variables builds understanding faster than reading. The "html" field contains the full HTML/CSS/JS code that renders inside a sandboxed iframe.
 
 Component selection rules:
@@ -74,6 +74,8 @@ export interface LessonPromptParams {
   conceptName: string
   prerequisites: string[]
   retrievedChunks: string[]
+  /** Detected domain instructions (from subject detection) */
+  domainInstructions?: string
   persona?: {
     interests?: string[]
     explanationStyle?: string
@@ -87,7 +89,7 @@ export interface LessonPromptParams {
 }
 
 export function buildLessonPrompt(params: LessonPromptParams): string {
-  const { conceptName, prerequisites, retrievedChunks, persona } = params
+  const { conceptName, prerequisites, retrievedChunks, persona, domainInstructions } = params
   const strength = persona?.framingStrength ?? 'moderate'
 
   const personaSection = persona
@@ -127,8 +129,10 @@ Framing rules:
       ? `Source material (use this as ground truth — do not invent facts):\n\n${retrievedChunks.map((c, i) => `[Chunk ${i + 1}]\n${c}`).join('\n\n')}`
       : 'No source chunks available — generate based on general knowledge of this concept.'
 
+  const domainSection = domainInstructions ? `\n${domainInstructions}\n` : ''
+
   return `${LESSON_COMPONENT_INSTRUCTIONS}
-${personaSection}
+${domainSection}${personaSection}
 Topic: ${conceptName}
 ${prerequisiteSection}
 
@@ -136,5 +140,7 @@ ${chunksSection}
 
 Generate a complete lesson following the structure above. The lesson should feel like
 a skilled tutor explaining the concept — engaging, clear, and building understanding
-from the ground up. End with key_takeaway (required).`
+from the ground up. End with key_takeaway (required).
+
+IMPORTANT: Every section object must include ALL schema fields. Use empty string "" for unused string fields, empty array [] for unused array fields. The from/to fields for concept_bridge are named from_concept and to_concept.`
 }

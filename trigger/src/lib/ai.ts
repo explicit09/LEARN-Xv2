@@ -11,8 +11,8 @@ export const openaiProvider = createOpenAI({
 
 export const MODEL_ROUTES = {
   CONCEPT_EXTRACTION: process.env.CONCEPT_MODEL ?? 'claude-sonnet-4-6',
-  CHUNK_ENRICHMENT: process.env.ENRICHMENT_MODEL ?? 'claude-haiku-4-5-20251001',
-  LESSON_GENERATION: process.env.LESSON_MODEL ?? 'claude-haiku-4-5-20251001',
+  CHUNK_ENRICHMENT: process.env.ENRICHMENT_MODEL ?? 'gpt-5.4-nano',
+  LESSON_GENERATION: process.env.LESSON_MODEL ?? 'claude-sonnet-4-6',
   QUIZ_GENERATION: process.env.QUIZ_MODEL ?? 'gemini-2.0-flash-lite',
   FLASHCARD_GENERATION: process.env.FLASHCARD_MODEL ?? 'gemini-2.0-flash-lite',
 } as const

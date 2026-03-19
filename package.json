@@ -20,15 +20,24 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@ai-sdk/anthropic": "^3.0.58",
+    "@ai-sdk/google": "^3.0.43",
+    "@ai-sdk/openai": "^3.0.41",
+    "ai": "^6.0.116",
     "eslint": "^9.39.4",
     "husky": "^9",
     "lint-staged": "^15",
     "prettier": "^3",
+    "tsx": "^4.21.0",
     "turbo": "latest",
     "typescript": "^5",
-    "typescript-eslint": "^8.57.0"
+    "typescript-eslint": "^8.57.0",
+    "unpdf": "^1.4.0"
   },
   "lint-staged": {
     "*.{ts,tsx,json,md,yaml}": "prettier --write"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
   }
 }
