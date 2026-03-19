@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const documentStatusEnum = z.enum(['uploading', 'processing', 'ready', 'failed'])
 export type DocumentStatus = z.infer<typeof documentStatusEnum>
 
-export const documentFileTypeEnum = z.enum(['pdf', 'docx', 'txt', 'md'])
+export const documentFileTypeEnum = z.enum(['pdf', 'docx', 'pptx', 'txt', 'md', 'html'])
 export type DocumentFileType = z.infer<typeof documentFileTypeEnum>
 
 export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50 MB

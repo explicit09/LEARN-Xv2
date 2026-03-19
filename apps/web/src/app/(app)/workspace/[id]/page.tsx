@@ -67,7 +67,7 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
       <Topbar title={workspace.name as string} />
       <div className="flex-1 overflow-auto p-4 md:p-8 flex flex-col gap-6 max-w-[1400px] mx-auto w-full">
         {/* Header Block */}
-        <div className="relative overflow-hidden rounded-3xl glass-card border border-border/50 p-6 md:p-10 mb-2 mt-4 shadow-sm group">
+        <div className="relative overflow-hidden rounded-3xl bg-card/70 dark:bg-card/90 backdrop-blur-xl border border-border/60 dark:border-white/10 p-6 md:p-10 mb-2 mt-4 shadow-sm group shrink-0">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-20 -mt-20 group-hover:bg-primary/20 transition-colors duration-1000" />
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
@@ -111,7 +111,7 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
         </div>
 
         {/* Floating Pill Tab Bar */}
-        <div className="flex items-center gap-2 bg-muted/40 backdrop-blur-md p-1.5 rounded-2xl border border-border/50 overflow-x-auto custom-scrollbar">
+        <div className="flex items-center gap-2 bg-muted/40 backdrop-blur-md p-1.5 rounded-2xl border border-border/50 overflow-x-auto custom-scrollbar shrink-0">
           {TABS.map((t) => {
             const Icon = t.icon
             const isActive = activeTab === t.key
