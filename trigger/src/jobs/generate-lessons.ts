@@ -22,10 +22,7 @@ interface GenerateLessonsPayload {
   userId: string
 }
 
-// ── Section schema (flat, all fields required — works with all LLM providers) ──
-// The LLM fills relevant fields per section type and uses "" / [] for unused fields.
-// The LessonRenderer in the frontend reads the `type` field to decide which component to render.
-
+// Flat section schema — LLM fills relevant fields per type, uses "" / [] for unused.
 const lessonSectionZ = z.object({
   type: z.string(), // text|concept_definition|process_flow|comparison_table|analogy_card|key_takeaway|mini_quiz|quote_block|timeline|concept_bridge|code_explainer|interactive_widget
   content: z.string(),
@@ -115,9 +112,6 @@ async function generateLessonWithRetry(model: string, prompt: string): Promise<G
   throw lastErr
 }
 
-// ── Main task ────────────────────────────────────────────────────
-
-// Process concepts in parallel batches for speed
 const BATCH_SIZE = 7
 
 export const generateLessons = task({
@@ -384,11 +378,17 @@ export const generateLessons = task({
       }
     }
 
+    // Process in batches of BATCH_SIZE for parallelism
     for (let b = 0; b < orderedConcepts.length; b += BATCH_SIZE) {
       const batch = orderedConcepts
         .slice(b, b + BATCH_SIZE)
         .map((_, idx) => processOneConcept(b + idx))
       await Promise.all(batch)
+      logger.info(`Batch done`, {
+        from: b,
+        to: Math.min(b + BATCH_SIZE, orderedConcepts.length),
+        lessonsTotal: generatedLessons.length,
+      })
     }
 
     logger.info('generate-lessons complete', {
