@@ -46,12 +46,34 @@ export async function POST(req: NextRequest) {
   try {
     const { conceptName, workspaceId, prerequisites, retrievedChunks, persona } = await req.json()
 
+    if (!conceptName || !workspaceId) {
+      return NextResponse.json(
+        { error: 'conceptName and workspaceId are required' },
+        { status: 400 },
+      )
+    }
+
     // Auth check
     const supabase = await createClient()
     const {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { data: userRow } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_id', user.id)
+      .single()
+    if (!userRow) return NextResponse.json({ error: 'User not found' }, { status: 404 })
+
+    const { data: workspace } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('id', workspaceId)
+      .eq('user_id', userRow.id)
+      .single()
+    if (!workspace) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const prompt = buildLessonPrompt({
       conceptName,

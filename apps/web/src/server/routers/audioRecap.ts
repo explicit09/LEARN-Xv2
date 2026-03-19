@@ -90,6 +90,14 @@ export const audioRecapRouter = createTRPCRouter({
       const userId = await resolveUserId(ctx.supabase, ctx.user.id)
       await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
 
+      const { data: lesson } = await ctx.supabase
+        .from('lessons')
+        .select('id')
+        .eq('id', input.lessonId)
+        .eq('workspace_id', input.workspaceId)
+        .maybeSingle()
+      if (!lesson) throw new TRPCError({ code: 'NOT_FOUND', message: 'Lesson not found' })
+
       const { data: job, error: jobError } = await ctx.supabase
         .from('jobs')
         .insert({

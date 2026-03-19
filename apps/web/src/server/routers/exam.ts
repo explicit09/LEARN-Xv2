@@ -137,6 +137,19 @@ export const examRouter = createTRPCRouter({
 
     if (!exam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Exam not found' })
 
+    const { data: questions, error: questionsError } = await ctx.supabase
+      .from('exam_questions')
+      .select('id, question, question_type, options, bloom_level, order_index')
+      .eq('exam_id', input.examId)
+      .order('order_index', { ascending: true })
+
+    if (questionsError) {
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: questionsError.message })
+    }
+    if (!questions?.length) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Exam has no questions' })
+    }
+
     const { data: attempt, error } = await ctx.supabase
       .from('exam_attempts')
       .insert({
@@ -150,12 +163,6 @@ export const examRouter = createTRPCRouter({
 
     if (error || !attempt)
       throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message })
-
-    const { data: questions } = await ctx.supabase
-      .from('exam_questions')
-      .select('id, question, question_type, options, bloom_level, order_index')
-      .eq('exam_id', input.examId)
-      .order('order_index', { ascending: true })
 
     return {
       attempt,
@@ -174,11 +181,23 @@ export const examRouter = createTRPCRouter({
 
       const { data: attempt } = await ctx.supabase
         .from('exam_attempts')
-        .select('id')
+        .select('id, exam_id, completed_at')
         .eq('id', input.attemptId)
         .eq('user_id', userId)
         .single()
       if (!attempt) throw new TRPCError({ code: 'NOT_FOUND', message: 'Attempt not found' })
+      if (attempt.completed_at) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Exam attempt already completed' })
+      }
+
+      const { data: question } = await ctx.supabase
+        .from('exam_questions')
+        .select('id, exam_id')
+        .eq('id', input.questionId)
+        .single()
+      if (!question || question.exam_id !== attempt.exam_id) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Question not found' })
+      }
 
       // Upsert response (allow overwrite before completion)
       const { data: existing } = await ctx.supabase

@@ -103,6 +103,16 @@ export const quizRouter = createTRPCRouter({
       .single()
     if (!quiz) throw new TRPCError({ code: 'NOT_FOUND', message: 'Quiz not found' })
 
+    const { count: questionCount, error: countError } = await ctx.supabase
+      .from('quiz_questions')
+      .select('id', { count: 'exact', head: true })
+      .eq('quiz_id', input.quizId)
+    if (countError)
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: countError.message })
+    if (!questionCount) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Quiz has no questions' })
+    }
+
     const { data: attempt, error } = await ctx.supabase
       .from('quiz_attempts')
       .insert({
@@ -135,15 +145,43 @@ export const quizRouter = createTRPCRouter({
 
       const { data: question } = await ctx.supabase
         .from('quiz_questions')
-        .select('id, correct_answer, question_type')
+        .select('id, quiz_id, correct_answer, question_type')
         .eq('id', input.questionId)
         .single()
       if (!question) throw new TRPCError({ code: 'NOT_FOUND', message: 'Question not found' })
+      if (question.quiz_id !== attempt.quiz_id) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Question not found' })
+      }
 
       const isCorrect =
         question.question_type === 'multiple_choice' || question.question_type === 'true_false'
           ? input.userAnswer.trim().toLowerCase() === question.correct_answer.trim().toLowerCase()
           : null
+
+      const { data: existing } = await ctx.supabase
+        .from('quiz_responses')
+        .select('id')
+        .eq('attempt_id', input.attemptId)
+        .eq('question_id', input.questionId)
+        .maybeSingle()
+
+      if (existing) {
+        const { data: updated, error } = await ctx.supabase
+          .from('quiz_responses')
+          .update({
+            user_answer: input.userAnswer,
+            is_correct: isCorrect,
+          })
+          .eq('id', existing.id)
+          .select('id, is_correct')
+          .single()
+
+        if (error || !updated) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message })
+        }
+
+        return updated
+      }
 
       const { data: response, error } = await ctx.supabase
         .from('quiz_responses')

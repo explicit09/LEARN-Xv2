@@ -100,10 +100,10 @@ export const analyticsRouter = createTRPCRouter({
       // Get flashcard reviews grouped by date
       const { data: reviews } = await ctx.supabase
         .from('flashcard_reviews')
-        .select('created_at, review_duration_ms')
+        .select('reviewed_at')
         .eq('user_id', userId)
-        .gte('created_at', startDate)
-        .lte('created_at', endDate)
+        .gte('reviewed_at', startDate)
+        .lte('reviewed_at', endDate)
 
       // Aggregate by date
       const dayMap = new Map<string, number>()
@@ -116,9 +116,10 @@ export const analyticsRouter = createTRPCRouter({
       }
 
       for (const r of reviews ?? []) {
-        const date = (r.created_at as string)?.split('T')[0]
+        const date = (r.reviewed_at as string)?.split('T')[0]
         if (!date) continue
-        const mins = Math.round(((r.review_duration_ms as number) ?? 2000) / 60000)
+        // Review duration is not stored; count each completed review as 1 minute of activity.
+        const mins = 1
         dayMap.set(date, (dayMap.get(date) ?? 0) + mins)
       }
 

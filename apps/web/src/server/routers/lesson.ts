@@ -144,8 +144,8 @@ export const lessonRouter = createTRPCRouter({
       try {
         const { generateLessons } = await import('@/../../../trigger/src/jobs/generate-lessons')
         await generateLessons.trigger({ workspaceId: input.workspaceId, userId })
-      } catch {
-        // TRIGGER_SECRET_KEY not set in dev/test — job row still created
+      } catch (err) {
+        console.error('[lesson.triggerGenerate] Trigger.dev call failed:', err)
       }
 
       return { jobId: job!.id as string, status: 'queued' as const }

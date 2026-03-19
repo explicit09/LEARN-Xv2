@@ -123,10 +123,14 @@ export const getAtRiskStudents = protectedProcedure
       .select('id, display_name, email')
       .in('id', studentIds)
 
-    return (students ?? []).map((s) => ({
-      userId: s.id as string,
-      displayName: s.display_name as string,
-      email: s.email as string,
-      isAtRisk: true, // Simplified: flag all for now, real impl checks last_active
-    }))
+    // No reliable at-risk signal is currently stored for last activity or mastery trend.
+    // Return an empty set instead of flagging every active enrollee as risky.
+    return (students ?? [])
+      .map((s) => ({
+        userId: s.id as string,
+        displayName: s.display_name as string,
+        email: s.email as string,
+        isAtRisk: false,
+      }))
+      .filter((student) => student.isAtRisk)
   })
