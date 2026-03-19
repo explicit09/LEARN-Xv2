@@ -36,14 +36,18 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
   }>
 
   async function handleStart() {
+    if (startAttempt.isPending) return
     const attempt = await startAttempt.mutateAsync({ quizId, workspaceId })
     setAttemptId(attempt.id)
     setCurrentIndex(0)
+    setUserAnswer('')
+    setLastResult(null)
+    setFinalScore(null)
     setStep('answering')
   }
 
   async function handleSubmit() {
-    if (!attemptId) return
+    if (!attemptId || submitResponse.isPending) return
     const q = questions[currentIndex]
     if (!q) return
     const result = await submitResponse.mutateAsync({
@@ -56,6 +60,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
   }
 
   async function handleNext() {
+    if (completeAttempt.isPending) return
     if (currentIndex + 1 < questions.length) {
       setCurrentIndex((i) => i + 1)
       setUserAnswer('')
@@ -76,6 +81,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
         <p className="mt-2 text-sm text-gray-500">{questions.length} questions</p>
         <button
           onClick={handleStart}
+          disabled={startAttempt.isPending}
           className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           Start Quiz
@@ -91,7 +97,14 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
         <h2 className="text-2xl font-bold text-gray-900">{pct}%</h2>
         <p className="mt-2 text-sm text-gray-500">Quiz complete</p>
         <button
-          onClick={() => setStep('ready')}
+          onClick={() => {
+            setAttemptId(null)
+            setCurrentIndex(0)
+            setUserAnswer('')
+            setLastResult(null)
+            setFinalScore(null)
+            setStep('ready')
+          }}
           className="mt-4 rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
         >
           Retake
@@ -183,7 +196,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
         {step === 'answering' ? (
           <button
             onClick={handleSubmit}
-            disabled={!userAnswer}
+            disabled={!userAnswer || submitResponse.isPending}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
             Submit
@@ -191,6 +204,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
         ) : (
           <button
             onClick={handleNext}
+            disabled={completeAttempt.isPending}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
             {currentIndex + 1 < questions.length ? 'Next' : 'Finish'}
