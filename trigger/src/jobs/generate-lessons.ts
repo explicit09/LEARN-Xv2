@@ -1,11 +1,12 @@
 import { task, logger } from '@trigger.dev/sdk/v3'
 import { createClient } from '@supabase/supabase-js'
-import { generateObject } from 'ai'
+import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
 import { anthropic, MODEL_ROUTES } from '../lib/ai'
 import { orderConceptsByPrerequisites } from '../lib/concept-ordering'
 import { PROMPT_VERSION, buildLessonPrompt } from '../lib/prompts/lesson-generation.v1'
+import { getDomainConfig } from '../lib/prompts/domains'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -21,73 +22,42 @@ interface GenerateLessonsPayload {
   userId: string
 }
 
-// ── Section schemas ──────────────────────────────────────────────
-// Mirrors lessonSectionSchema in @learn-x/validators but inlined
-// to avoid cross-package import in trigger runtime.
+// ── Section schema (flat, all fields required — works with all LLM providers) ──
+// The LLM fills relevant fields per section type and uses "" / [] for unused fields.
+// The LessonRenderer in the frontend reads the `type` field to decide which component to render.
 
-const lessonSectionZ = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('text'), content: z.string() }),
-  z.object({
-    type: z.literal('concept_definition'),
-    term: z.string(),
-    definition: z.string(),
-    analogy: z.string().optional(),
-    etymology: z.string().optional(),
-  }),
-  z.object({
-    type: z.literal('process_flow'),
-    title: z.string(),
-    steps: z.array(z.object({ label: z.string(), description: z.string() })),
-  }),
-  z.object({
-    type: z.literal('comparison_table'),
-    title: z.string(),
-    columns: z.array(z.string()),
-    rows: z.array(z.object({ label: z.string(), values: z.array(z.string()) })),
-  }),
-  z.object({
-    type: z.literal('analogy_card'),
-    concept: z.string(),
-    analogy: z.string(),
-    mapping: z.array(z.object({ abstract: z.string(), familiar: z.string() })),
-  }),
-  z.object({ type: z.literal('key_takeaway'), points: z.array(z.string()) }),
-  z.object({
-    type: z.literal('mini_quiz'),
-    question: z.string(),
-    options: z.array(z.object({ label: z.string(), text: z.string(), is_correct: z.boolean() })),
-    explanation: z.string(),
-  }),
-  z.object({ type: z.literal('quote_block'), quote: z.string(), attribution: z.string() }),
-  z.object({
-    type: z.literal('timeline'),
-    title: z.string(),
-    events: z.array(z.object({ date: z.string(), label: z.string(), description: z.string() })),
-  }),
-  z.object({
-    type: z.literal('concept_bridge'),
-    from: z.string(),
-    to: z.string(),
-    relation: z.enum(['prerequisite', 'extends', 'related']),
-    explanation: z.string(),
-  }),
-  z.object({
-    type: z.literal('code_explainer'),
-    language: z.string(),
-    code: z.string(),
-    annotations: z.array(z.object({ line: z.number(), note: z.string() })),
-  }),
-  z.object({
-    type: z.literal('interactive_widget'),
-    title: z.string(),
-    description: z.string(),
-    html: z.string(),
-  }),
-])
+const lessonSectionZ = z.object({
+  type: z.string(), // text|concept_definition|process_flow|comparison_table|analogy_card|key_takeaway|mini_quiz|quote_block|timeline|concept_bridge|code_explainer|interactive_widget
+  content: z.string(),
+  term: z.string(),
+  definition: z.string(),
+  analogy: z.string(),
+  title: z.string(),
+  question: z.string(),
+  explanation: z.string(),
+  concept: z.string(),
+  from_concept: z.string(),
+  to_concept: z.string(),
+  relation: z.string(),
+  language: z.string(),
+  code: z.string(),
+  quote: z.string(),
+  attribution: z.string(),
+  description: z.string(),
+  html: z.string(),
+  points: z.array(z.string()),
+  columns: z.array(z.string()),
+  steps: z.array(z.object({ label: z.string(), description: z.string() })),
+  rows: z.array(z.object({ label: z.string(), values: z.array(z.string()) })),
+  mapping: z.array(z.object({ abstract: z.string(), familiar: z.string() })),
+  options: z.array(z.object({ label: z.string(), text: z.string(), is_correct: z.boolean() })),
+  annotations: z.array(z.object({ line: z.number(), note: z.string() })),
+  events: z.array(z.object({ date: z.string(), label: z.string(), description: z.string() })),
+})
 
 const lessonOutputSchema = z.object({
   title: z.string(),
-  summary: z.string().optional(),
+  summary: z.string(),
   key_takeaways: z.array(z.string()),
   sections: z.array(lessonSectionZ),
 })
@@ -117,23 +87,23 @@ async function embedTexts(texts: string[]): Promise<number[][]> {
 const MAX_ATTEMPTS = 2
 interface GenerateResult {
   object: z.infer<typeof lessonOutputSchema>
-  promptTokens: number
-  completionTokens: number
+  inputTokens: number
+  outputTokens: number
 }
 
 async function generateLessonWithRetry(model: string, prompt: string): Promise<GenerateResult> {
   let lastErr: unknown
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      const { object, usage } = await generateObject({
+      const { output: object, usage } = await generateText({
         model: anthropic(model),
-        schema: lessonOutputSchema,
+        output: Output.object({ schema: lessonOutputSchema }),
         prompt,
       })
       return {
         object,
-        promptTokens: usage.promptTokens,
-        completionTokens: usage.completionTokens,
+        inputTokens: usage.inputTokens ?? 0,
+        outputTokens: usage.outputTokens ?? 0,
       }
     } catch (err) {
       lastErr = err
@@ -162,6 +132,19 @@ export const generateLessons = task({
 
     logger.info('generate-lessons started', { workspaceId, userId })
 
+    // 0. Fetch workspace domain settings
+    const { data: wsData } = await supabase
+      .from('workspaces')
+      .select('settings')
+      .eq('id', workspaceId)
+      .single()
+    const wsSettings = (wsData?.settings as Record<string, unknown>) ?? {}
+    const domainConfig = getDomainConfig(wsSettings.primaryDomain as string | undefined)
+    logger.info('Domain config', {
+      domain: wsSettings.primaryDomain,
+      framework: domainConfig.framework,
+    })
+
     // 1. Fetch all concepts for workspace
     const { data: concepts, error: conceptsError } = await supabase
       .from('concepts')
@@ -174,17 +157,49 @@ export const generateLessons = task({
       return { lessons: 0, reason: 'no_concepts' }
     }
 
+    // 1b. Skip concepts that already have lessons (prevent duplicates on re-run)
+    const { data: existingLC } = await supabase
+      .from('lesson_concepts')
+      .select('concept_id')
+      .in(
+        'concept_id',
+        concepts.map((c) => c.id),
+      )
+    const coveredConceptIds = new Set((existingLC ?? []).map((lc) => lc.concept_id as string))
+    const newConcepts = concepts.filter((c) => !coveredConceptIds.has(c.id))
+    if (newConcepts.length === 0) {
+      logger.info('All concepts already have lessons', { workspaceId, total: concepts.length })
+      return { lessons: 0, reason: 'all_covered' }
+    }
+
+    // 1c. Prevent concurrent duplicate runs — check for recent in-flight lesson generation
+    const { count: recentLessonCount } = await supabase
+      .from('lessons')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId)
+      .gte('created_at', new Date(Date.now() - 60_000).toISOString())
+    if ((recentLessonCount ?? 0) > 0) {
+      logger.info('Recent lessons detected, skipping to avoid race', { recentLessonCount })
+      return { lessons: 0, reason: 'concurrent_run' }
+    }
+
+    logger.info('Concepts to generate', {
+      total: concepts.length,
+      alreadyCovered: coveredConceptIds.size,
+      toGenerate: newConcepts.length,
+    })
+
     // 2. Order concepts by prerequisites
     const { data: relations } = await supabase
       .from('concept_relations')
       .select('source_concept_id, target_concept_id, relation_type')
       .in(
         'source_concept_id',
-        concepts.map((c) => c.id),
+        newConcepts.map((c) => c.id),
       )
 
     const orderedConcepts = orderConceptsByPrerequisites(
-      concepts,
+      newConcepts,
       (relations ?? []).map((r) => ({
         sourceConceptId: r.source_concept_id as string,
         targetConceptId: r.target_concept_id as string,
@@ -289,6 +304,7 @@ export const generateLessons = task({
         conceptName: String(concept.name),
         prerequisites,
         retrievedChunks,
+        domainInstructions: domainConfig.instructions,
         ...(personaContext ? { persona: personaContext } : {}),
       })
 
@@ -301,8 +317,8 @@ export const generateLessons = task({
           user_id: userId,
           model: MODEL,
           provider: 'anthropic',
-          prompt_tokens: result.promptTokens,
-          completion_tokens: result.completionTokens,
+          prompt_tokens: result.inputTokens,
+          completion_tokens: result.outputTokens,
           latency_ms: Date.now() - start,
           task_name: 'generate-lessons',
           prompt_version: PROMPT_VERSION,
@@ -351,10 +367,7 @@ export const generateLessons = task({
           lessonId: lesson.id,
         })
       } catch (err) {
-        logger.error('Failed after retries', {
-          conceptId: concept.id,
-          err: String(err),
-        })
+        logger.error('Failed after retries', { conceptId: concept.id, err: String(err) })
         await supabase.from('ai_requests').insert({
           workspace_id: workspaceId,
           user_id: userId,
@@ -371,25 +384,17 @@ export const generateLessons = task({
       }
     }
 
-    // Process in batches of BATCH_SIZE for parallelism
     for (let b = 0; b < orderedConcepts.length; b += BATCH_SIZE) {
       const batch = orderedConcepts
         .slice(b, b + BATCH_SIZE)
         .map((_, idx) => processOneConcept(b + idx))
       await Promise.all(batch)
-      logger.info(`Batch done`, {
-        from: b,
-        to: Math.min(b + BATCH_SIZE, orderedConcepts.length),
-        lessonsTotal: generatedLessons.length,
-      })
     }
 
     logger.info('generate-lessons complete', {
-      workspaceId,
       generated: generatedLessons.length,
       total: orderedConcepts.length,
     })
-
     return { lessons: generatedLessons.length }
   },
 })
