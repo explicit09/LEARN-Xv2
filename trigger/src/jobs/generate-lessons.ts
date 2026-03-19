@@ -7,6 +7,7 @@ import { anthropic, MODEL_ROUTES } from '../lib/ai'
 import { orderConceptsByPrerequisites } from '../lib/concept-ordering'
 import { PROMPT_VERSION, buildLessonPrompt } from '../lib/prompts/lesson-generation.v1'
 import { getDomainConfig } from '../lib/prompts/domains'
+import { selectInterestsForLesson, primaryAnalogyDomain } from '../lib/interest-rotation'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -58,7 +59,6 @@ const lessonOutputSchema = z.object({
   key_takeaways: z.array(z.string()),
   sections: z.array(lessonSectionZ),
 })
-
 const EMBEDDING_DIMENSIONS = 3072
 
 async function embedTexts(texts: string[]): Promise<number[][]> {
@@ -81,44 +81,34 @@ async function embedTexts(texts: string[]): Promise<number[][]> {
   return json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding)
 }
 
-const MAX_ATTEMPTS = 2
 interface GenerateResult {
   object: z.infer<typeof lessonOutputSchema>
   inputTokens: number
   outputTokens: number
 }
-
 async function generateLessonWithRetry(model: string, prompt: string): Promise<GenerateResult> {
   let lastErr: unknown
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const { output: object, usage } = await generateText({
         model: anthropic(model),
         output: Output.object({ schema: lessonOutputSchema }),
         prompt,
       })
-      return {
-        object,
-        inputTokens: usage.inputTokens ?? 0,
-        outputTokens: usage.outputTokens ?? 0,
-      }
+      return { object, inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0 }
     } catch (err) {
       lastErr = err
-      logger.warn(`generateObject attempt ${attempt + 1} failed, retrying`, {
-        err: String(err),
-      })
+      logger.warn(`generateObject attempt ${attempt + 1} failed`, { err: String(err) })
     }
   }
   throw lastErr
 }
-
 const BATCH_SIZE = 7
 
 export const generateLessons = task({
   id: 'generate-lessons',
-  maxDuration: 900, // 15 min — 14 concepts in batches of 4
+  maxDuration: 900,
   retry: { maxAttempts: 2 },
-
   run: async (payload: GenerateLessonsPayload) => {
     const { workspaceId, userId } = payload
     const supabase = makeSupabase()
@@ -220,23 +210,24 @@ export const generateLessons = task({
       .maybeSingle()
 
     const expPrefs = (persona?.explanation_preferences as Record<string, string> | null) ?? {}
-    const personaContext =
-      persona != null
-        ? ({
-            ...(persona.interests ? { interests: persona.interests as string[] } : {}),
-            ...(expPrefs['explanationStyle']
-              ? { explanationStyle: expPrefs['explanationStyle'] }
-              : {}),
-            ...(expPrefs['depthPreference']
-              ? { depthPreference: expPrefs['depthPreference'] }
-              : {}),
-            tonePreference:
-              (persona.tone_preference as string) ?? expPrefs['tonePreference'] ?? undefined,
-            motivationalStyle: (persona.motivational_style as string) ?? undefined,
-            difficultyPreference: (persona.difficulty_preference as string) ?? undefined,
-            framingStrength: 'moderate' as const,
-          } as Parameters<typeof buildLessonPrompt>[0]['persona'])
-        : undefined
+    const allInterests = (persona?.interests as string[]) ?? []
+
+    /** Build per-lesson persona with rotated interests. */
+    function personaForLesson(lessonIndex: number) {
+      if (!persona) return undefined
+      const selected = selectInterestsForLesson(allInterests, lessonIndex, userId)
+      return {
+        interests: selected,
+        analogyDomain: primaryAnalogyDomain(selected),
+        ...(expPrefs['explanationStyle'] ? { explanationStyle: expPrefs['explanationStyle'] } : {}),
+        ...(expPrefs['depthPreference'] ? { depthPreference: expPrefs['depthPreference'] } : {}),
+        tonePreference:
+          (persona.tone_preference as string) ?? expPrefs['tonePreference'] ?? undefined,
+        motivationalStyle: (persona.motivational_style as string) ?? undefined,
+        difficultyPreference: (persona.difficulty_preference as string) ?? undefined,
+        framingStrength: 'moderate' as const,
+      } as Parameters<typeof buildLessonPrompt>[0]['persona']
+    }
 
     // 5. Fetch syllabus topic map
     const { data: syllabusTopics } = await supabase
@@ -294,12 +285,13 @@ export const generateLessons = task({
         logger.warn('hybrid_search failed', { conceptId: concept.id })
       }
 
+      const lessonPersona = personaForLesson(i)
       const prompt = buildLessonPrompt({
         conceptName: String(concept.name),
         prerequisites,
         retrievedChunks,
         domainInstructions: domainConfig.instructions,
-        ...(personaContext ? { persona: personaContext } : {}),
+        ...(lessonPersona ? { persona: lessonPersona } : {}),
       })
 
       const start = Date.now()
