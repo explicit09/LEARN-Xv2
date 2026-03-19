@@ -1,6 +1,6 @@
 import { task, logger } from '@trigger.dev/sdk/v3'
 import { createClient } from '@supabase/supabase-js'
-import { generateObject } from 'ai'
+import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
 import { openaiProvider } from '../lib/ai'
@@ -125,9 +125,9 @@ export const generateQuiz = task({
         quizType,
       })
 
-      const { object: output, usage } = await generateObject({
+      const { output, usage } = await generateText({
         model: openaiProvider('gpt-4o-mini'),
-        schema: quizOutputSchema,
+        output: Output.object({ schema: quizOutputSchema }),
         prompt,
       })
 
@@ -137,9 +137,9 @@ export const generateQuiz = task({
       await supabase.from('ai_requests').insert({
         workspace_id: workspaceId,
         model: 'gpt-4o-mini',
-        prompt_tokens: usage.promptTokens,
-        completion_tokens: usage.completionTokens,
-        cost_usd: usage.promptTokens * 0.00000015 + usage.completionTokens * 0.0000006,
+        prompt_tokens: usage.inputTokens ?? 0,
+        completion_tokens: usage.outputTokens ?? 0,
+        cost_usd: (usage.inputTokens ?? 0) * 0.00000015 + (usage.outputTokens ?? 0) * 0.0000006,
         latency_ms: latencyMs,
         task_name: QUIZ_GENERATION_PROMPT_VERSION,
       })

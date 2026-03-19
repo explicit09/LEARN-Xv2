@@ -68,8 +68,16 @@ function LessonSectionBlock({ section }: { section: LessonSection }) {
     case 'concept_bridge':
       return (
         <ConceptBridge
-          from={section.from}
-          to={section.to}
+          from={
+            (section as Record<string, string>).from_concept ||
+            (section as Record<string, string>).from ||
+            ''
+          }
+          to={
+            (section as Record<string, string>).to_concept ||
+            (section as Record<string, string>).to ||
+            ''
+          }
           relation={section.relation}
           explanation={section.explanation}
         />

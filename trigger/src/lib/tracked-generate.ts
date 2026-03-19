@@ -6,8 +6,8 @@ export interface AiCallMetadata {
   userId: string
   model: string
   provider: 'anthropic' | 'openai' | 'google'
-  promptTokens: number
-  completionTokens: number
+  inputTokens: number
+  outputTokens: number
   latencyMs: number
   taskName: string
   promptVersion: string
@@ -41,8 +41,8 @@ export function buildAiRequestRow(meta: AiCallMetadata): AiRequestRow {
     user_id: meta.userId,
     model: meta.model,
     provider: meta.provider,
-    prompt_tokens: meta.promptTokens,
-    completion_tokens: meta.completionTokens,
+    prompt_tokens: meta.inputTokens,
+    completion_tokens: meta.outputTokens,
     latency_ms: meta.latencyMs,
     task_name: meta.taskName,
     prompt_version: meta.promptVersion,

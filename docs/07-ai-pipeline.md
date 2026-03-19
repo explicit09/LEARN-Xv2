@@ -6,7 +6,7 @@ The AI pipeline is the core infrastructure that makes every downstream feature w
 
 ```
 Upload
-  → Parse (Reducto REST)
+  → Parse (unpdf local, Gemini Flash fallback for scanned PDFs)
   → Chunk (structure-aware, 512 tokens)
   → Enrich chunks (Haiku generates 50-100 token context per chunk — 67% retrieval improvement)
   → Embed enriched content (text-embedding-3-large, batched, stored as halfvec(3072))
@@ -33,14 +33,14 @@ Query (chat / quiz / lesson generation)
 
 ## Phase 1 AI Stack (TypeScript only)
 
-| Task | Tool | Notes |
-|------|------|-------|
-| Document parsing | Reducto REST API | `reducto-ts` npm package — replaces LlamaParse (EOL May 2026) |
-| Chunking | Custom TypeScript logic | Structure-aware + contextual enrichment, see below |
-| Embeddings | OpenAI `text-embedding-3-large` via Helicone | 3072 dimensions, batch API, stored as `halfvec` |
-| Content generation | Claude Sonnet 4.6 via Vercel AI SDK + Helicone | Lessons, concept extraction, chat |
-| Fast generation | Gemini 3.1 Flash-Lite via Vercel AI SDK + Helicone | Quizzes, flashcards, study guides — $0.25/MTok |
-| Reranking | None in Phase 1 | Add Cohere Rerank in Phase 2 when quality demands it |
+| Task               | Tool                                               | Notes                                                |
+| ------------------ | -------------------------------------------------- | ---------------------------------------------------- |
+| Document parsing   | unpdf (local) + Gemini Flash fallback              | Local text extraction; Gemini OCR for scanned PDFs   |
+| Chunking           | Custom TypeScript logic                            | Structure-aware + contextual enrichment, see below   |
+| Embeddings         | OpenAI `text-embedding-3-large` via Helicone       | 3072 dimensions, batch API, stored as `halfvec`      |
+| Content generation | Claude Sonnet 4.6 via Vercel AI SDK + Helicone     | Lessons, concept extraction, chat                    |
+| Fast generation    | Gemini 3.1 Flash-Lite via Vercel AI SDK + Helicone | Quizzes, flashcards, study guides — $0.25/MTok       |
+| Reranking          | None in Phase 1                                    | Add Cohere Rerank in Phase 2 when quality demands it |
 
 Phase 2 adds the Python FastAPI service for Docling (table extraction), custom reranking, and more complex RAG pipelines.
 
@@ -48,36 +48,43 @@ Phase 2 adds the Python FastAPI service for Docling (table extraction), custom r
 
 ## Document Parsing
 
-### Reducto
+### Two-tier PDF extraction
 
-Use `reducto-ts` (the official Reducto TypeScript SDK).
+**Tier 1 — unpdf (local, instant, free):** Extracts text from text-based PDFs using Mozilla's pdf.js under the hood. Handles 90%+ of course materials (lecture notes, homework, textbook chapters). No API call, no cost, no latency.
 
-> **Migration note:** LlamaParse is EOL May 1, 2026. Reducto is the drop-in replacement — same Markdown output format, same REST API pattern, improved table and equation handling.
+**Tier 2 — Gemini Flash fallback (for scanned/image PDFs):** If unpdf extracts less than 50 characters, the PDF is likely scanned or image-only. Falls back to Gemini 2.0 Flash, which sends the PDF as a multimodal input and returns clean markdown. Handles OCR, tables in images, and handwritten content.
 
 ```typescript
-import Reducto from 'reducto-ts'
+import { extractText } from 'unpdf'
+import { google } from '@ai-sdk/google'
 
-const reducto = new Reducto({ apiKey: process.env.REDUCTO_API_KEY })
+async function extractPdfText(blob: Blob): Promise<string> {
+  // Tier 1: unpdf — local, instant
+  const buffer = await blob.arrayBuffer()
+  const { text } = await extractText(new Uint8Array(buffer))
+  const localText = text.join('\n\n').trim()
 
-async function parseDocument(fileBuffer: Buffer, fileType: string): Promise<ParsedDocument> {
-  const result = await reducto.parse({
-    document: fileBuffer,
-    options: {
-      output_format: 'markdown',     // returns clean Markdown
-      extract_tables: true,
-      extract_equations: true,
-    },
+  if (localText.length >= 50) return localText
+
+  // Tier 2: Gemini Flash — scanned/image PDFs
+  const base64 = Buffer.from(buffer).toString('base64')
+  const { text: geminiText } = await generateText({
+    model: google('gemini-2.0-flash'),
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'file', data: base64, mimeType: 'application/pdf' },
+          { type: 'text', text: 'Extract all text as clean markdown.' },
+        ],
+      },
+    ],
   })
-
-  return {
-    text: result.content,
-    pageCount: result.page_count,
-    wordCount: countWords(result.content),
-  }
+  return geminiText.trim()
 }
 ```
 
-**Why Reducto:** Consistent parsing regardless of document complexity. Handles tables, code blocks, equations, and scanned documents. Returns clean Markdown that feeds directly into structure-aware chunking. Managed API with no self-hosted infrastructure required.
+**Why this approach:** No external parsing API dependency. Local parsing is instant and free for text PDFs. Gemini fallback handles edge cases (scanned docs) using infrastructure already in our stack. Matches LEARN-X v1's approach (pypdf local + Gemini AI).
 
 ### URL ingestion
 
@@ -99,7 +106,7 @@ import { YoutubeTranscript } from 'youtube-transcript'
 async function getYoutubeTranscript(url: string): Promise<ParsedDocument> {
   const videoId = extractVideoId(url)
   const transcript = await YoutubeTranscript.fetchTranscript(videoId)
-  const text = transcript.map(t => t.text).join(' ')
+  const text = transcript.map((t) => t.text).join(' ')
   return { text, pageCount: 1, wordCount: countWords(text) }
 }
 ```
@@ -109,6 +116,7 @@ async function getYoutubeTranscript(url: string): Promise<ParsedDocument> {
 ## Chunking Strategy
 
 ### Targets
+
 - **Q&A / quiz / flashcard retrieval:** 512 tokens, 15% overlap (~77 tokens)
 - **Lesson generation:** 1024 tokens (wider context for narrative generation)
 
@@ -128,7 +136,7 @@ function chunkDocument(parsed: ParsedDocument): Chunk[] {
       chunks.push({
         content: section.content,
         sectionHeading: section.heading,
-        contentType: detectContentType(section.content),  // text|table|code|equation
+        contentType: detectContentType(section.content), // text|table|code|equation
       })
     } else {
       // Large section → split with overlap, carry heading forward
@@ -150,7 +158,7 @@ function chunkDocument(parsed: ParsedDocument): Chunk[] {
 
 **Critical:** Never split in the middle of a worked example, definition, or proof. Detect these patterns and keep them as a single chunk even if they exceed 512 tokens (cap at 1024).
 
-```typescript
+````typescript
 function detectContentType(text: string): ContentType {
   if (/^```|^\s{4}/.test(text)) return 'code'
   if (/\|.*\|.*\|/.test(text)) return 'table'
@@ -159,7 +167,7 @@ function detectContentType(text: string): ContentType {
   if (/^(Example|Case study|Worked example):/.test(text)) return 'example'
   return 'text'
 }
-```
+````
 
 ---
 
@@ -173,12 +181,12 @@ Chunks lose context when split from their document. A chunk containing "The form
 
 ### Results
 
-| Approach | Retrieval Failure Rate |
-|----------|----------------------|
-| Baseline hybrid search | 5.7% |
-| + Contextual embeddings | 3.5% (−38%) |
-| + Contextual BM25 | 2.9% (−49%) |
-| + Reranker on top | 1.9% (−67%) |
+| Approach                | Retrieval Failure Rate |
+| ----------------------- | ---------------------- |
+| Baseline hybrid search  | 5.7%                   |
+| + Contextual embeddings | 3.5% (−38%)            |
+| + Contextual BM25       | 2.9% (−49%)            |
+| + Reranker on top       | 1.9% (−67%)            |
 
 Source: Anthropic Contextual Retrieval research.
 
@@ -253,7 +261,7 @@ async function generateEmbeddings(texts: string[]): Promise<number[][]> {
       input: batch,
       dimensions: 3072,
     })
-    embeddings.push(...response.data.map(d => d.embedding))
+    embeddings.push(...response.data.map((d) => d.embedding))
   }
 
   return embeddings
@@ -268,21 +276,24 @@ async function generateEmbeddings(texts: string[]): Promise<number[][]> {
 // After generating embeddings, store in a single transaction
 // Note: cast to halfvec — required at 3072 dims for HNSW index compatibility
 await db.transaction(async (tx) => {
-  const insertedChunks = await tx.insert(chunksTable)
-    .values(chunks.map(c => ({
-      ...c,
-      content: c.content,          // original content — what students see in citations
-      documentId,
-      workspaceId,
-    })))
+  const insertedChunks = await tx
+    .insert(chunksTable)
+    .values(
+      chunks.map((c) => ({
+        ...c,
+        content: c.content, // original content — what students see in citations
+        documentId,
+        workspaceId,
+      })),
+    )
     .returning()
 
   await tx.insert(chunkEmbeddings).values(
     insertedChunks.map((chunk, i) => ({
       chunkId: chunk.id,
-      embedding: sql`${JSON.stringify(embeddings[i])}::halfvec`,  // halfvec not vector
+      embedding: sql`${JSON.stringify(embeddings[i])}::halfvec`, // halfvec not vector
       modelVersion: 'text-embedding-3-large',
-    }))
+    })),
   )
 })
 ```
@@ -298,10 +309,10 @@ All retrieval — chat, lesson generation, quiz generation — goes through the 
 ```typescript
 // Knowledge Store service — the only place hybrid_search is called
 async function retrieveChunks(params: {
-  workspaceId: string,
-  query: string,
-  limit?: number,
-  vectorWeight?: number,
+  workspaceId: string
+  query: string
+  limit?: number
+  vectorWeight?: number
 }): Promise<RetrievedChunk[]> {
   // 1. Embed the query
   const [queryEmbedding] = await generateEmbeddings([params.query])
@@ -328,7 +339,7 @@ After `hybrid_search` returns top-20, add a Cohere Rerank cross-encoder step:
 const reranked = await cohere.rerank({
   model: 'rerank-english-v3.0',
   query: params.query,
-  documents: top20.map(r => r.content),
+  documents: top20.map((r) => r.content),
   topN: 5,
 })
 ```
@@ -401,11 +412,14 @@ async function extractConceptTriples(
 function deduplicateTriples(triples: ConceptTriple[]): ConceptTriple[] {
   // Normalize: lowercase, remove leading articles (a/an/the), trim
   const normalize = (name: string) =>
-    name.toLowerCase().replace(/^(a|an|the)\s+/i, '').trim()
+    name
+      .toLowerCase()
+      .replace(/^(a|an|the)\s+/i, '')
+      .trim()
 
   // Deduplicate by normalized name pair + relation
   const seen = new Set<string>()
-  return triples.filter(t => {
+  return triples.filter((t) => {
     const key = `${normalize(t.source)}|${t.relation}|${normalize(t.target)}`
     if (seen.has(key)) return false
     seen.add(key)
@@ -470,29 +484,29 @@ Length: {targetLength} words.
 
 All model slots are environment-variable controlled for A/B testing and provider flexibility. Primary stack as of March 2026:
 
-| Content type | Model | Effort | Rationale |
-|-------------|-------|--------|-----------|
-| Lesson generation | `claude-sonnet-4-6` | `high` | Best structured output quality; prompt caching economics |
-| Concept extraction | `claude-sonnet-4-6` | `high` | Accuracy critical; structured output reliability |
-| Chat responses | `claude-sonnet-4-6` | `medium` | Speed + quality; context compaction for long sessions |
-| Widget HTML generation | `claude-sonnet-4-6` | `high` | Code quality matters for interactive components |
-| Quiz questions (MCQ, T/F) | `gemini-3.1-flash-lite` | — | $0.25/MTok; simple task; high volume |
-| Flashcard generation | `gemini-3.1-flash-lite` | — | Cheapest option; simple format |
-| Short-answer evaluation | `claude-sonnet-4-6` | `low` | Fast judgment; low effort sufficient |
-| Study guide | `gemini-3.1-flash-lite` | — | Summarization; budget task |
-| Chunk context enrichment | `claude-haiku-4-5` | — | Fast, cheap; benefits from document cache hits |
-| Full-context chat (small workspace) | `claude-opus-4-6` | `medium` | 1M context at flat rate; no retrieval overhead |
+| Content type                        | Model                   | Effort   | Rationale                                                |
+| ----------------------------------- | ----------------------- | -------- | -------------------------------------------------------- |
+| Lesson generation                   | `claude-sonnet-4-6`     | `high`   | Best structured output quality; prompt caching economics |
+| Concept extraction                  | `claude-sonnet-4-6`     | `high`   | Accuracy critical; structured output reliability         |
+| Chat responses                      | `claude-sonnet-4-6`     | `medium` | Speed + quality; context compaction for long sessions    |
+| Widget HTML generation              | `claude-sonnet-4-6`     | `high`   | Code quality matters for interactive components          |
+| Quiz questions (MCQ, T/F)           | `gemini-3.1-flash-lite` | —        | $0.25/MTok; simple task; high volume                     |
+| Flashcard generation                | `gemini-3.1-flash-lite` | —        | Cheapest option; simple format                           |
+| Short-answer evaluation             | `claude-sonnet-4-6`     | `low`    | Fast judgment; low effort sufficient                     |
+| Study guide                         | `gemini-3.1-flash-lite` | —        | Summarization; budget task                               |
+| Chunk context enrichment            | `claude-haiku-4-5`      | —        | Fast, cheap; benefits from document cache hits           |
+| Full-context chat (small workspace) | `claude-opus-4-6`       | `medium` | 1M context at flat rate; no retrieval overhead           |
 
 ```typescript
 // Environment-based model routing — config change, not code change
 export const MODEL_ROUTES = {
-  LESSON_GENERATION:   process.env.LESSON_MODEL    ?? 'claude-sonnet-4-6',
-  CONCEPT_EXTRACTION:  process.env.CONCEPT_MODEL   ?? 'claude-sonnet-4-6',
-  CHAT:                process.env.CHAT_MODEL       ?? 'claude-sonnet-4-6',
-  FAST_GENERATION:     process.env.FAST_MODEL       ?? 'gemini-3.1-flash-lite',
-  CHUNK_ENRICHMENT:    process.env.ENRICHMENT_MODEL ?? 'claude-haiku-4-5',
-  FULL_CONTEXT_CHAT:   process.env.FULL_CTX_MODEL   ?? 'claude-opus-4-6',
-  EMBEDDING:           process.env.EMBEDDING_MODEL  ?? 'text-embedding-3-large',
+  LESSON_GENERATION: process.env.LESSON_MODEL ?? 'claude-sonnet-4-6',
+  CONCEPT_EXTRACTION: process.env.CONCEPT_MODEL ?? 'claude-sonnet-4-6',
+  CHAT: process.env.CHAT_MODEL ?? 'claude-sonnet-4-6',
+  FAST_GENERATION: process.env.FAST_MODEL ?? 'gemini-3.1-flash-lite',
+  CHUNK_ENRICHMENT: process.env.ENRICHMENT_MODEL ?? 'claude-haiku-4-5',
+  FULL_CONTEXT_CHAT: process.env.FULL_CTX_MODEL ?? 'claude-opus-4-6',
+  EMBEDDING: process.env.EMBEDDING_MODEL ?? 'text-embedding-3-large',
 } as const
 ```
 
@@ -556,7 +570,11 @@ const trace = langfuse.trace({ name: 'lesson-generation', userId })
 const span = trace.span({ name: 'retrieval' })
 // ... retrieval ...
 span.end()
-const generation = trace.generation({ name: 'sonnet-lesson', model: 'claude-sonnet-4-6', input: prompt })
+const generation = trace.generation({
+  name: 'sonnet-lesson',
+  model: 'claude-sonnet-4-6',
+  input: prompt,
+})
 // ... generate ...
 generation.end({ output: result })
 ```
@@ -578,6 +596,7 @@ lib/ai/prompts/
 ```
 
 Each prompt file exports a builder function:
+
 ```typescript
 export const lessonGenerationPromptV1 = (params: LessonPromptParams): string => `...`
 export const PROMPT_VERSION = 'lesson-generation.v1'
@@ -635,7 +654,7 @@ async function buildFullContextMessages(
         // Block 2: Full document corpus — cached per workspace
         {
           type: 'text',
-          text: documents.map(d => `## ${d.fileName}\n\n${d.fullText}`).join('\n\n---\n\n'),
+          text: documents.map((d) => `## ${d.fileName}\n\n${d.fullText}`).join('\n\n---\n\n'),
           experimental_providerMetadata: {
             anthropic: { cacheControl: { type: 'ephemeral' } },
           },
@@ -663,10 +682,10 @@ Standard hybrid search pipeline. See Retrieval section above.
 
 ### Cost Comparison (100 queries, 50-page workspace ~75K tokens)
 
-| | First query | Subsequent (cached) | 100-query total |
-|--|-------------|---------------------|-----------------|
-| Full-context (Claude Opus) | $0.375 | $0.038 | ~$4.12 |
-| RAG (hybrid search + Sonnet) | $0.05 | $0.05 | $5.00 |
+|                              | First query | Subsequent (cached) | 100-query total |
+| ---------------------------- | ----------- | ------------------- | --------------- |
+| Full-context (Claude Opus)   | $0.375      | $0.038              | ~$4.12          |
+| RAG (hybrid search + Sonnet) | $0.05       | $0.05               | $5.00           |
 
 At small workspace sizes, full-context with caching is cheaper and simpler. RAG wins at scale.
 
@@ -687,13 +706,13 @@ Structure every LLM call to maximize cache hits. The rule: **static content firs
 
 ### Expected Savings Per Session (20 queries)
 
-| Block | Tokens | Cache? | First query | Query 2-20 |
-|-------|--------|--------|-------------|------------|
-| System instructions | ~1.5K | Yes | $0.0075 | $0.00075 |
-| Workspace context | ~2K | Yes | $0.01 | $0.001 |
-| Persona context | ~2K | Yes | $0.01 | $0.001 |
-| Variable (chunks + history + query) | ~6K | No | $0.03 | $0.03 |
-| **Total** | | | **$0.058** | **$0.033** |
+| Block                               | Tokens | Cache? | First query | Query 2-20 |
+| ----------------------------------- | ------ | ------ | ----------- | ---------- |
+| System instructions                 | ~1.5K  | Yes    | $0.0075     | $0.00075   |
+| Workspace context                   | ~2K    | Yes    | $0.01       | $0.001     |
+| Persona context                     | ~2K    | Yes    | $0.01       | $0.001     |
+| Variable (chunks + history + query) | ~6K    | No     | $0.03       | $0.03      |
+| **Total**                           |        |        | **$0.058**  | **$0.033** |
 
 Session savings: 43% on queries 2-20. At scale across thousands of daily active users, prompt caching is the single largest cost lever available.
 

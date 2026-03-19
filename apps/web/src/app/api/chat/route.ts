@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
       modelId = MODEL_ROUTES.CHAT
 
       const { embedding: queryEmbedding } = await embed({
-        model: openai.embedding('text-embedding-3-large', { dimensions: 3072 }),
+        model: openai.textEmbeddingModel('text-embedding-3-large'),
         value: message,
       })
 
@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
           role: 'assistant',
           content: text,
           model_used: modelId,
-          token_count: (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0),
+          token_count: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
           latency_ms: latencyMs,
         }
         if (citedChunkIds.length > 0) insertMsg['cited_chunk_ids'] = citedChunkIds
@@ -215,8 +215,8 @@ export async function POST(req: NextRequest) {
           workspace_id: workspace.id,
           model: modelId,
           provider: 'anthropic',
-          prompt_tokens: usage.promptTokens ?? 0,
-          completion_tokens: usage.completionTokens ?? 0,
+          prompt_tokens: usage.inputTokens ?? 0,
+          completion_tokens: usage.outputTokens ?? 0,
           latency_ms: latencyMs,
           task_name: 'chat',
           prompt_version: CHAT_PROMPT_VERSION,
@@ -225,7 +225,7 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    return result.toDataStreamResponse()
+    return result.toUIMessageStreamResponse()
   } catch (error) {
     console.error('[chat/route] Error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

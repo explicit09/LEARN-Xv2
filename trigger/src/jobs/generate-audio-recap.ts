@@ -87,7 +87,7 @@ export const generateAudioRecap = task({
       const { text: dialogue, usage } = await generateText({
         model: anthropic(MODEL_ROUTES.LESSON_GENERATION),
         prompt,
-        maxTokens: 1200,
+        maxOutputTokens: 1200,
       })
 
       const latencyMs = Date.now() - startMs
@@ -97,9 +97,9 @@ export const generateAudioRecap = task({
         workspace_id: workspaceId,
         user_id: userId,
         model: MODEL_ROUTES.LESSON_GENERATION,
-        prompt_tokens: usage.promptTokens,
-        completion_tokens: usage.completionTokens,
-        cost_usd: usage.promptTokens * 0.000003 + usage.completionTokens * 0.000015,
+        prompt_tokens: usage.inputTokens ?? 0,
+        completion_tokens: usage.outputTokens ?? 0,
+        cost_usd: (usage.inputTokens ?? 0) * 0.000003 + (usage.outputTokens ?? 0) * 0.000015,
         latency_ms: latencyMs,
         task_name: AUDIO_PROMPT_VERSION,
       })

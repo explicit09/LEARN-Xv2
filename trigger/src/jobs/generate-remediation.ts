@@ -1,6 +1,6 @@
 import { task, logger } from '@trigger.dev/sdk/v3'
 import { createClient } from '@supabase/supabase-js'
-import { generateObject } from 'ai'
+import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
 import { anthropic, MODEL_ROUTES } from '../lib/ai'
@@ -104,9 +104,9 @@ Create a targeted remediation lesson (500-800 words) that:
 Return valid JSON matching the schema.`
 
     const startMs = Date.now()
-    const { object: output, usage } = await generateObject({
+    const { output, usage } = await generateText({
       model: anthropic(MODEL_ROUTES.LESSON_GENERATION),
-      schema: remediationSchema,
+      output: Output.object({ schema: remediationSchema }),
       prompt,
     })
 
@@ -117,9 +117,9 @@ Return valid JSON matching the schema.`
       workspace_id: workspaceId,
       user_id: userId,
       model: MODEL_ROUTES.LESSON_GENERATION,
-      prompt_tokens: usage.promptTokens,
-      completion_tokens: usage.completionTokens,
-      cost_usd: usage.promptTokens * 0.000003 + usage.completionTokens * 0.000015,
+      prompt_tokens: usage.inputTokens ?? 0,
+      completion_tokens: usage.outputTokens ?? 0,
+      cost_usd: (usage.inputTokens ?? 0) * 0.000003 + (usage.outputTokens ?? 0) * 0.000015,
       latency_ms: latencyMs,
       task_name: REMEDIATION_PROMPT_VERSION,
     })
