@@ -3,12 +3,13 @@ import { createClient } from '@supabase/supabase-js'
 import OpenAI from 'openai'
 import { generateText } from 'ai'
 
-import { anthropic, MODEL_ROUTES } from '../lib/ai'
+import { openaiProvider, MODEL_ROUTES } from '../lib/ai'
 import { chunkText } from '../lib/chunker'
+import { detectSubject } from '../lib/subject-detection'
+import { extractText } from '../lib/text-extraction'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const REDUCTO_API_KEY = process.env.REDUCTO_API_KEY
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!
 
 interface ProcessDocumentPayload {
@@ -38,8 +39,8 @@ async function recordAiRequest(
     workspaceId: string
     model: string
     provider: string
-    promptTokens: number
-    completionTokens: number
+    inputTokens: number
+    outputTokens: number
     costUsd: number
     latencyMs: number
     taskName: string
@@ -49,8 +50,8 @@ async function recordAiRequest(
     workspace_id: fields.workspaceId,
     model: fields.model,
     provider: fields.provider,
-    prompt_tokens: fields.promptTokens,
-    completion_tokens: fields.completionTokens,
+    prompt_tokens: fields.inputTokens,
+    completion_tokens: fields.outputTokens,
     cost_usd: fields.costUsd,
     latency_ms: fields.latencyMs,
     task_name: fields.taskName,
@@ -88,29 +89,51 @@ export const processDocument = task({
       await setProgress(supabase, jobId, 14)
 
       // ── Parse ───────────────────────────────────────────────────
-      let rawText: string
-      if (REDUCTO_API_KEY && doc.file_type === 'pdf') {
-        rawText = await parseWithReducto(fileBlob, doc.title as string)
-      } else {
-        rawText = await fileBlob.text()
+      const rawText = await extractText(fileBlob, doc.file_type as string)
+
+      // ── Chunk + Detect Subject (parallel) ──────────────────────
+      const [textChunks, subjectMeta] = await Promise.all([
+        Promise.resolve(chunkText(rawText)),
+        detectSubject(rawText, doc.title as string, OPENAI_API_KEY).catch((err) => {
+          logger.warn('Subject detection failed', { error: String(err).slice(0, 200) })
+          return null
+        }),
+      ])
+
+      if (textChunks.length === 0) {
+        throw new Error(
+          `Document produced no chunks (raw text length: ${rawText.length}). ` +
+            `File type: ${doc.file_type}. The file may be empty, image-only, or unsupported.`,
+        )
       }
 
-      await setProgress(supabase, jobId, 28)
-
-      // ── Chunk ───────────────────────────────────────────────────
-      const textChunks = chunkText(rawText)
-      if (textChunks.length === 0) throw new Error('Document produced no chunks')
+      // Store detected subject on document + workspace
+      if (subjectMeta) {
+        const now = new Date().toISOString()
+        await supabase
+          .from('documents')
+          .update({ metadata: subjectMeta, updated_at: now })
+          .eq('id', documentId)
+        await supabase
+          .from('workspaces')
+          .update({
+            settings: {
+              primaryDomain: subjectMeta.domain,
+              subfield: subjectMeta.subfield,
+              pedagogicalFramework: subjectMeta.pedagogical_framework,
+              scaffoldingDirection: subjectMeta.scaffolding_direction,
+              componentEmphasis: subjectMeta.component_emphasis,
+              detectedAt: now,
+            },
+          })
+          .eq('id', doc.workspace_id)
+        logger.info('Subject detected', { documentId, domain: subjectMeta.domain })
+      }
 
       await setProgress(supabase, jobId, 42)
 
       // ── Enrich (Anthropic Contextual Retrieval) ──────────────────
-      // Cache full document once; Claude Haiku generates context per chunk
-      const enriched = await enrichChunksWithContext(
-        supabase,
-        textChunks,
-        rawText,
-        doc,
-      )
+      const enriched = await enrichChunksWithContext(supabase, textChunks, rawText, doc)
 
       await setProgress(supabase, jobId, 56)
 
@@ -156,39 +179,11 @@ export const processDocument = task({
   },
 })
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Text Extraction ──────────────────────────────────────────────────────────
 
-async function parseWithReducto(fileBlob: Blob, title: string): Promise<string> {
-  // Step 1: Upload file to get a reducto:// file_id
-  const uploadForm = new FormData()
-  uploadForm.append('file', fileBlob, `${title}.pdf`)
-  const uploadRes = await fetch('https://platform.reducto.ai/upload', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${REDUCTO_API_KEY}` },
-    body: uploadForm,
-  })
-  if (!uploadRes.ok) throw new Error(`Reducto upload failed: ${uploadRes.statusText}`)
-  const { file_id } = (await uploadRes.json()) as { file_id: string }
+// Text extraction moved to ../lib/text-extraction.ts
 
-  // Step 2: Parse using the file_id
-  const parseRes = await fetch('https://platform.reducto.ai/parse', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${REDUCTO_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ input: file_id }),
-  })
-  if (!parseRes.ok) throw new Error(`Reducto parse failed: ${parseRes.statusText}`)
-
-  // Response: { chunks: [{ content: string }] } or { result: { chunks: [{ content }] } }
-  const json = (await parseRes.json()) as {
-    chunks?: { content: string }[]
-    result?: { chunks?: { content: string }[] }
-  }
-  const chunks = json.chunks ?? json.result?.chunks ?? []
-  return chunks.map((c) => c.content).join('\n\n')
-}
+// ── Enrichment ────────────────────────────────────────────────────────────────
 
 interface EnrichedChunk {
   content: string
@@ -197,11 +192,12 @@ interface EnrichedChunk {
   tokenCount: number
 }
 
+const ENRICHMENT_CONCURRENCY = 10
+
 /**
- * Anthropic Contextual Retrieval enrichment.
- * Caches the full document text once (cache_write), then for each chunk
- * calls Claude Haiku reading from cache (cache_read) to generate a
- * 50-100 token context summary. Prepends context to enrichedContent.
+ * Contextual Retrieval enrichment — parallelized.
+ * Runs ENRICHMENT_CONCURRENCY calls at once using GPT-5.4 nano (cheap, fast).
+ * Each call sends a trimmed document context + chunk, gets 1-2 sentence summary.
  */
 async function enrichChunksWithContext(
   supabase: Supabase,
@@ -210,67 +206,58 @@ async function enrichChunksWithContext(
   doc: { title: string; workspace_id: string },
 ): Promise<EnrichedChunk[]> {
   const MODEL = MODEL_ROUTES.CHUNK_ENRICHMENT
-  const results: EnrichedChunk[] = []
+  // Trim document to ~100K chars (~25K tokens) to stay within context limits
+  const docContext = fullDocumentText.slice(0, 100_000)
+  const results: EnrichedChunk[] = new Array(chunks.length)
 
-  // Haiku cost: ~$0.00000008/token cached read, $0.000004/token output
-  const CACHE_READ_COST_PER_TOKEN = 0.00000008
-  const OUTPUT_COST_PER_TOKEN = 0.000004
-
-  for (const chunk of chunks) {
+  const enrichOne = async (chunk: (typeof chunks)[number], index: number) => {
     const start = Date.now()
     try {
       const { text, usage } = await generateText({
-        model: anthropic(MODEL),
-        maxTokens: 120,
+        model: openaiProvider(MODEL),
+        maxOutputTokens: 120,
         messages: [
           {
+            role: 'system',
+            content: `You are a document analyst. Given a full document and a specific chunk from it, describe in 1-2 sentences what the chunk covers and how it fits into the broader document. Be specific. Do not summarize the chunk itself.`,
+          },
+          {
             role: 'user',
-            content: [
-              // Block 1: full document — cached after first chunk (ephemeral, ~5 min TTL)
-              {
-                type: 'text',
-                text: `<document>\n${fullDocumentText}\n</document>`,
-                experimental_providerMetadata: {
-                  anthropic: { cacheControl: { type: 'ephemeral' } },
-                },
-              },
-              // Block 2: the specific chunk — not cached (changes per iteration)
-              {
-                type: 'text',
-                text: `Here is a chunk from the document above:\n<chunk>\n${chunk.content}\n</chunk>\n\nIn 1-2 sentences, describe what this chunk is about and how it fits into the broader document. Be specific. Do not summarize the chunk itself.`,
-              },
-            ],
+            content: `<document>\n${docContext}\n</document>\n\n<chunk>\n${chunk.content}\n</chunk>`,
           },
         ],
       })
 
-      const promptTokens = usage.promptTokens
-      const completionTokens = usage.completionTokens
       await recordAiRequest(supabase, {
         workspaceId: doc.workspace_id as string,
         model: MODEL,
-        provider: 'anthropic',
-        promptTokens,
-        completionTokens,
-        costUsd:
-          promptTokens * CACHE_READ_COST_PER_TOKEN +
-          completionTokens * OUTPUT_COST_PER_TOKEN,
+        provider: 'openai',
+        inputTokens: usage.inputTokens ?? 0,
+        outputTokens: usage.outputTokens ?? 0,
+        costUsd: (usage.inputTokens ?? 0) * 0.0000002 + (usage.outputTokens ?? 0) * 0.00000125,
         latencyMs: Date.now() - start,
         taskName: 'process-document:enrich',
       })
 
-      results.push({
+      results[index] = {
         ...chunk,
-        // Prepend context summary — used for embedding and FTS (stored as enriched_content)
         enrichedContent: `${text.trim()}\n\n${chunk.content}`,
-      })
+      }
     } catch {
-      results.push({ ...chunk, enrichedContent: '' })
+      results[index] = { ...chunk, enrichedContent: '' }
     }
+  }
+
+  // Process in batches of ENRICHMENT_CONCURRENCY
+  for (let i = 0; i < chunks.length; i += ENRICHMENT_CONCURRENCY) {
+    const batch = chunks.slice(i, i + ENRICHMENT_CONCURRENCY)
+    await Promise.all(batch.map((chunk, j) => enrichOne(chunk, i + j)))
   }
 
   return results
 }
+
+// ── Embedding ─────────────────────────────────────────────────────────────────
 
 async function embedChunks(
   openai: OpenAI,
@@ -280,21 +267,22 @@ async function embedChunks(
 ): Promise<number[][]> {
   const MODEL = 'text-embedding-3-large'
   const embeddings: number[][] = []
-  // Embed enrichedContent when available (includes context prefix), fallback to content
-  const texts = chunks.map((c) =>
-    c.enrichedContent ? c.enrichedContent : c.content,
-  )
+  const texts = chunks.map((c) => (c.enrichedContent ? c.enrichedContent : c.content))
 
   for (let i = 0; i < texts.length; i += 100) {
     const batch = texts.slice(i, i + 100)
     const start = Date.now()
-    const response = await openai.embeddings.create({ model: MODEL, input: batch, dimensions: 3072 })
+    const response = await openai.embeddings.create({
+      model: MODEL,
+      input: batch,
+      dimensions: 3072,
+    })
     await recordAiRequest(supabase, {
       workspaceId: doc.workspace_id as string,
       model: MODEL,
       provider: 'openai',
-      promptTokens: response.usage.prompt_tokens,
-      completionTokens: 0,
+      inputTokens: response.usage.prompt_tokens,
+      outputTokens: 0,
       costUsd: response.usage.prompt_tokens * 0.00000013,
       latencyMs: Date.now() - start,
       taskName: 'process-document:embed',
@@ -304,6 +292,8 @@ async function embedChunks(
 
   return embeddings
 }
+
+// ── Storage ───────────────────────────────────────────────────────────────────
 
 async function storeChunksAndEmbeddings(
   supabase: Supabase,
@@ -326,7 +316,6 @@ async function storeChunksAndEmbeddings(
     .select('id')
   if (chunkError || !inserted) throw new Error('Failed to store chunks')
 
-  // chunk_embeddings: chunk_id is PK, no workspace_id, include model_version
   const embeddingRows = inserted.map((c, i) => ({
     chunk_id: c.id,
     embedding: `[${(embeddings[i] ?? []).join(',')}]`,
