@@ -51,6 +51,22 @@ describe('studyPlan.getToday', () => {
 
     await ctx._cleanup?.()
   })
+
+  it('rejects accessing another user workspace when workspaceId is provided', async () => {
+    const ownerCtx = await createTestContext({ authenticated: true })
+    const outsiderCtx = await createTestContext({ authenticated: true })
+
+    try {
+      const ownerWorkspace = await createTestWorkspace(ownerCtx)
+
+      await expect(
+        createCaller(outsiderCtx).studyPlan.getToday({ workspaceId: ownerWorkspace.id }),
+      ).rejects.toThrow(expect.objectContaining({ code: 'NOT_FOUND' } satisfies Partial<TRPCError>))
+    } finally {
+      await outsiderCtx._cleanup?.()
+      await ownerCtx._cleanup?.()
+    }
+  })
 })
 
 // ── studyPlan.setExamDate ──────────────────────────────────────────────────────
@@ -73,6 +89,25 @@ describe('studyPlan.setExamDate', () => {
     expect(result.examDate).toBe('2026-04-15')
 
     await ctx._cleanup?.()
+  })
+
+  it('rejects setting exam date for another user workspace', async () => {
+    const ownerCtx = await createTestContext({ authenticated: true })
+    const outsiderCtx = await createTestContext({ authenticated: true })
+
+    try {
+      const ownerWorkspace = await createTestWorkspace(ownerCtx)
+
+      await expect(
+        createCaller(outsiderCtx).studyPlan.setExamDate({
+          examDate: '2026-04-20',
+          workspaceId: ownerWorkspace.id,
+        }),
+      ).rejects.toThrow(expect.objectContaining({ code: 'NOT_FOUND' } satisfies Partial<TRPCError>))
+    } finally {
+      await outsiderCtx._cleanup?.()
+      await ownerCtx._cleanup?.()
+    }
   })
 })
 
@@ -102,6 +137,24 @@ describe('studyPlan.getReadinessScore', () => {
     expect(result.readinessScore).toBeLessThanOrEqual(1)
 
     await ctx._cleanup?.()
+  })
+
+  it('rejects reading readiness score for another user workspace', async () => {
+    const ownerCtx = await createTestContext({ authenticated: true })
+    const outsiderCtx = await createTestContext({ authenticated: true })
+
+    try {
+      const ownerWorkspace = await createTestWorkspace(ownerCtx)
+
+      await expect(
+        createCaller(outsiderCtx).studyPlan.getReadinessScore({
+          workspaceId: ownerWorkspace.id,
+        }),
+      ).rejects.toThrow(expect.objectContaining({ code: 'NOT_FOUND' } satisfies Partial<TRPCError>))
+    } finally {
+      await outsiderCtx._cleanup?.()
+      await ownerCtx._cleanup?.()
+    }
   })
 })
 

@@ -95,14 +95,66 @@ describe('audioRecap.generate', () => {
     const ctx = await createTestContext({ authenticated: true })
     const caller = createCaller(ctx)
     const workspace = await createTestWorkspace(ctx)
+    const { data: userRow } = await ctx.supabase
+      .from('users')
+      .select('id')
+      .eq('auth_id', ctx.user!.id)
+      .single()
+    const { data: lesson } = await ctx.supabase
+      .from('lessons')
+      .insert({
+        workspace_id: workspace.id,
+        user_id: userRow!.id,
+        title: 'Audio lesson',
+        content_markdown: 'content',
+        structured_sections: [],
+      })
+      .select('id')
+      .single()
 
     const result = await caller.audioRecap.generate({
       workspaceId: workspace.id,
-      lessonId: '550e8400-e29b-41d4-a716-446655440001',
+      lessonId: lesson!.id as string,
     })
     expect(result).toHaveProperty('jobId')
     expect(typeof result.jobId).toBe('string')
 
     await ctx._cleanup?.()
+  })
+
+  it('rejects a lesson that does not belong to the requested workspace', async () => {
+    const ctx = await createTestContext({ authenticated: true })
+    const caller = createCaller(ctx)
+
+    try {
+      const workspaceA = await createTestWorkspace(ctx)
+      const workspaceB = await caller.workspace.create({ name: 'Other Audio WS' })
+      const { data: userRow } = await ctx.supabase
+        .from('users')
+        .select('id')
+        .eq('auth_id', ctx.user!.id)
+        .single()
+
+      const { data: lesson } = await ctx.supabase
+        .from('lessons')
+        .insert({
+          workspace_id: workspaceB.id,
+          user_id: userRow!.id,
+          title: 'Foreign lesson',
+          content_markdown: 'content',
+          structured_sections: [],
+        })
+        .select('id')
+        .single()
+
+      await expect(
+        caller.audioRecap.generate({
+          workspaceId: workspaceA.id,
+          lessonId: lesson!.id as string,
+        }),
+      ).rejects.toThrow(expect.objectContaining({ code: 'NOT_FOUND' } satisfies Partial<TRPCError>))
+    } finally {
+      await ctx._cleanup?.()
+    }
   })
 })

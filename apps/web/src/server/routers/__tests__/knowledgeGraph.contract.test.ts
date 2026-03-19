@@ -86,4 +86,61 @@ describe('knowledgeGraph.addRelation', () => {
       expect.objectContaining({ code: 'UNAUTHORIZED' } satisfies Partial<TRPCError>),
     )
   })
+
+  it('rejects creating a relation to a concept outside the user workspace', async () => {
+    const ownerCtx = await createTestContext({ authenticated: true })
+    const outsiderCtx = await createTestContext({ authenticated: true })
+
+    try {
+      const ownerCaller = createCaller(ownerCtx)
+      const outsiderCaller = createCaller(outsiderCtx)
+      const ownerWorkspace = await ownerCaller.workspace.create({ name: 'Owner KG WS' })
+      const outsiderWorkspace = await outsiderCaller.workspace.create({ name: 'Outsider KG WS' })
+
+      const { data: ownerUser } = await ownerCtx.supabase
+        .from('users')
+        .select('id')
+        .eq('auth_id', ownerCtx.user!.id)
+        .single()
+      const { data: outsiderUser } = await outsiderCtx.supabase
+        .from('users')
+        .select('id')
+        .eq('auth_id', outsiderCtx.user!.id)
+        .single()
+
+      const { data: sourceConcept } = await ownerCtx.supabase
+        .from('concepts')
+        .insert({
+          workspace_id: ownerWorkspace.id,
+          name: 'Owner Concept',
+        })
+        .select('id')
+        .single()
+
+      const { data: targetConcept } = await outsiderCtx.supabase
+        .from('concepts')
+        .insert({
+          workspace_id: outsiderWorkspace.id,
+          name: 'Outsider Concept',
+        })
+        .select('id')
+        .single()
+
+      expect(ownerUser).toBeTruthy()
+      expect(outsiderUser).toBeTruthy()
+      expect(sourceConcept).toBeTruthy()
+      expect(targetConcept).toBeTruthy()
+
+      await expect(
+        ownerCaller.knowledgeGraph.addRelation({
+          sourceConcept: sourceConcept!.id as string,
+          targetConcept: targetConcept!.id as string,
+          relationType: 'related',
+        }),
+      ).rejects.toThrow(expect.objectContaining({ code: 'NOT_FOUND' } satisfies Partial<TRPCError>))
+    } finally {
+      await outsiderCtx._cleanup?.()
+      await ownerCtx._cleanup?.()
+    }
+  })
 })

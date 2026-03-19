@@ -99,5 +99,179 @@ describe('quiz attempt flow', () => {
         workspaceId: workspace.id,
       }),
     ).rejects.toThrow(expect.objectContaining({ code: 'NOT_FOUND' } satisfies Partial<TRPCError>))
+
+    await ctx._cleanup?.()
+  })
+
+  it('rejects starting an attempt for a quiz with no questions', async () => {
+    const ctx = await createTestContext({ authenticated: true })
+    const caller = createCaller(ctx)
+    const workspace = await createTestWorkspace(ctx)
+
+    try {
+      const { data: quiz } = await ctx.supabase
+        .from('quizzes')
+        .insert({
+          workspace_id: workspace.id,
+          title: 'Empty quiz',
+          quiz_type: 'practice',
+        })
+        .select('id')
+        .single()
+
+      await expect(
+        caller.quiz.startAttempt({
+          quizId: quiz!.id as string,
+          workspaceId: workspace.id,
+        }),
+      ).rejects.toThrow(
+        expect.objectContaining({ code: 'BAD_REQUEST' } satisfies Partial<TRPCError>),
+      )
+    } finally {
+      await ctx._cleanup?.()
+    }
+  })
+
+  it('rejects submitting a question that does not belong to the attempt quiz', async () => {
+    const ctx = await createTestContext({ authenticated: true })
+    const caller = createCaller(ctx)
+    const workspace = await createTestWorkspace(ctx)
+
+    try {
+      const { data: userRow } = await ctx.supabase
+        .from('users')
+        .select('id')
+        .eq('auth_id', ctx.user!.id)
+        .single()
+
+      const { data: quizA } = await ctx.supabase
+        .from('quizzes')
+        .insert({
+          workspace_id: workspace.id,
+          title: 'Quiz A',
+          quiz_type: 'practice',
+        })
+        .select('id')
+        .single()
+
+      const { data: quizB } = await ctx.supabase
+        .from('quizzes')
+        .insert({
+          workspace_id: workspace.id,
+          title: 'Quiz B',
+          quiz_type: 'practice',
+        })
+        .select('id')
+        .single()
+
+      const { data: validQuestion } = await ctx.supabase
+        .from('quiz_questions')
+        .insert({
+          quiz_id: quizA!.id,
+          question: '2 + 2 = ?',
+          question_type: 'multiple_choice',
+          options: ['3', '4', '5'],
+          correct_answer: '4',
+          order_index: 0,
+        })
+        .select('id')
+        .single()
+
+      const { data: foreignQuestion } = await ctx.supabase
+        .from('quiz_questions')
+        .insert({
+          quiz_id: quizB!.id,
+          question: '5 + 5 = ?',
+          question_type: 'multiple_choice',
+          options: ['9', '10', '11'],
+          correct_answer: '10',
+          order_index: 0,
+        })
+        .select('id')
+        .single()
+
+      expect(userRow).toBeTruthy()
+      expect(validQuestion).toBeTruthy()
+      expect(foreignQuestion).toBeTruthy()
+
+      const attempt = await caller.quiz.startAttempt({
+        quizId: quizA!.id as string,
+        workspaceId: workspace.id,
+      })
+
+      await caller.quiz.submitResponse({
+        attemptId: attempt.id,
+        questionId: validQuestion!.id as string,
+        userAnswer: '4',
+      })
+
+      await expect(
+        caller.quiz.submitResponse({
+          attemptId: attempt.id,
+          questionId: foreignQuestion!.id as string,
+          userAnswer: '10',
+        }),
+      ).rejects.toThrow(expect.objectContaining({ code: 'NOT_FOUND' } satisfies Partial<TRPCError>))
+    } finally {
+      await ctx._cleanup?.()
+    }
+  })
+
+  it('does not create duplicate responses when the same question is submitted twice', async () => {
+    const ctx = await createTestContext({ authenticated: true })
+    const caller = createCaller(ctx)
+    const workspace = await createTestWorkspace(ctx)
+
+    try {
+      const { data: quiz } = await ctx.supabase
+        .from('quizzes')
+        .insert({
+          workspace_id: workspace.id,
+          title: 'Single question quiz',
+          quiz_type: 'practice',
+        })
+        .select('id')
+        .single()
+
+      const { data: question } = await ctx.supabase
+        .from('quiz_questions')
+        .insert({
+          quiz_id: quiz!.id,
+          question: 'Capital of France?',
+          question_type: 'multiple_choice',
+          options: ['A) London', 'B) Paris', 'C) Rome'],
+          correct_answer: 'B',
+          order_index: 0,
+        })
+        .select('id')
+        .single()
+
+      const attempt = await caller.quiz.startAttempt({
+        quizId: quiz!.id as string,
+        workspaceId: workspace.id,
+      })
+
+      await caller.quiz.submitResponse({
+        attemptId: attempt.id,
+        questionId: question!.id as string,
+        userAnswer: 'B',
+      })
+
+      await caller.quiz.submitResponse({
+        attemptId: attempt.id,
+        questionId: question!.id as string,
+        userAnswer: 'B',
+      })
+
+      const { count } = await ctx.supabase
+        .from('quiz_responses')
+        .select('id', { count: 'exact', head: true })
+        .eq('attempt_id', attempt.id)
+        .eq('question_id', question!.id as string)
+
+      expect(count).toBe(1)
+    } finally {
+      await ctx._cleanup?.()
+    }
   })
 })
