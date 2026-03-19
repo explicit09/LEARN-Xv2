@@ -89,7 +89,8 @@ export const processDocument = task({
       await setProgress(supabase, jobId, 14)
 
       // ── Parse ───────────────────────────────────────────────────
-      const rawText = await extractText(fileBlob, doc.file_type as string)
+      const extraction = await extractText(fileBlob, doc.file_type as string)
+      const rawText = extraction.text
 
       // ── Chunk + Detect Subject (parallel) ──────────────────────
       const [textChunks, subjectMeta] = await Promise.all([
@@ -143,7 +144,7 @@ export const processDocument = task({
       await setProgress(supabase, jobId, 70)
 
       // ── Store ───────────────────────────────────────────────────
-      await storeChunksAndEmbeddings(supabase, doc, enriched, embeddings)
+      await storeChunksAndEmbeddings(supabase, doc, enriched, embeddings, extraction.pages)
 
       await setProgress(supabase, jobId, 85)
 
@@ -293,6 +294,45 @@ async function embedChunks(
   return embeddings
 }
 
+// ── Page boundary mapping ────────────────────────────────────────────────────
+
+/**
+ * Map each chunk to its source page (1-indexed).
+ * Uses character offset matching: concatenate pages with the same separator
+ * used during extraction, then find where each chunk's content starts.
+ */
+function buildPageMap(
+  chunks: { content: string; chunkIndex: number }[],
+  pages: string[],
+): Map<number, number> {
+  // Build cumulative character offsets for each page boundary
+  const pageOffsets: { page: number; start: number; end: number }[] = []
+  let offset = 0
+  for (let i = 0; i < pages.length; i++) {
+    const len = pages[i]!.length
+    pageOffsets.push({ page: i + 1, start: offset, end: offset + len })
+    offset += len + 2 // +2 for '\n\n' separator between pages
+  }
+
+  const fullText = pages.join('\n\n')
+  const result = new Map<number, number>()
+
+  for (const chunk of chunks) {
+    // Find where this chunk's content first appears in the full text
+    const pos = fullText.indexOf(chunk.content.slice(0, 80))
+    if (pos === -1) continue
+    // Find which page this position falls in
+    for (const p of pageOffsets) {
+      if (pos >= p.start && pos < p.end) {
+        result.set(chunk.chunkIndex, p.page)
+        break
+      }
+    }
+  }
+
+  return result
+}
+
 // ── Storage ───────────────────────────────────────────────────────────────────
 
 async function storeChunksAndEmbeddings(
@@ -300,7 +340,11 @@ async function storeChunksAndEmbeddings(
   doc: { id: string; workspace_id: string },
   chunks: EnrichedChunk[],
   embeddings: number[][],
+  pages: string[] | null,
 ) {
+  // Build a page lookup: for each chunk, find which page it belongs to
+  const pageMap = pages ? buildPageMap(chunks, pages) : null
+
   const chunkRows = chunks.map((c) => ({
     document_id: doc.id,
     workspace_id: doc.workspace_id,
@@ -308,6 +352,7 @@ async function storeChunksAndEmbeddings(
     enriched_content: c.enrichedContent || null,
     chunk_index: c.chunkIndex,
     token_count: c.tokenCount,
+    page_number: pageMap ? (pageMap.get(c.chunkIndex) ?? null) : null,
   }))
 
   const { data: inserted, error: chunkError } = await supabase
