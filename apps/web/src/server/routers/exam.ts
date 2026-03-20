@@ -249,7 +249,7 @@ export const examRouter = createTRPCRouter({
     // Fetch all questions with correct answers
     const { data: questions } = await ctx.supabase
       .from('exam_questions')
-      .select('id, question_type, correct_answer, explanation')
+      .select('id, question_type, correct_answer, explanation, concept_id')
       .eq('exam_id', attempt.exam_id)
 
     // Fetch all responses
@@ -315,6 +315,31 @@ export const examRouter = createTRPCRouter({
         time_spent_seconds: timeSpentSeconds,
       })
       .eq('id', input.attemptId)
+
+    // Upsert mastery records for exam concepts
+    const conceptIds = [
+      ...new Set((questions ?? []).map((q) => q.concept_id as string).filter(Boolean)),
+    ]
+    if (conceptIds.length > 0) {
+      const { data: exam } = await ctx.supabase
+        .from('exams')
+        .select('workspace_id')
+        .eq('id', attempt.exam_id)
+        .single()
+      if (exam) {
+        const masteryLevel = Math.min(0.3 + score * 0.5, 1.0)
+        const masteryRows = conceptIds.map((conceptId) => ({
+          user_id: userId,
+          concept_id: conceptId,
+          workspace_id: exam.workspace_id,
+          mastery_level: masteryLevel,
+          source: 'exam',
+        }))
+        await ctx.supabase
+          .from('mastery_records')
+          .upsert(masteryRows, { onConflict: 'user_id,concept_id', ignoreDuplicates: false })
+      }
+    }
 
     return { score, total, correct, timeSpentSeconds, reviewed }
   }),

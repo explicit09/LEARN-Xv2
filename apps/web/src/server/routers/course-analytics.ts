@@ -123,14 +123,46 @@ export const getAtRiskStudents = protectedProcedure
       .select('id, display_name, email')
       .in('id', studentIds)
 
-    // No reliable at-risk signal is currently stored for last activity or mastery trend.
-    // Return an empty set instead of flagging every active enrollee as risky.
-    return (students ?? [])
-      .map((s) => ({
+    // At-risk signals: low avg mastery OR no activity in 5+ days
+    const results = []
+    for (const s of students ?? []) {
+      const { data: mastery } = await ctx.supabase
+        .from('mastery_records')
+        .select('mastery_level')
+        .eq('user_id', s.id)
+
+      const avgMastery =
+        mastery && mastery.length > 0
+          ? mastery.reduce((sum, m) => sum + (m.mastery_level as number), 0) / mastery.length
+          : null
+
+      // Check last activity (any event in ai_requests)
+      const { data: lastActivity } = await ctx.supabase
+        .from('ai_requests')
+        .select('created_at')
+        .eq('user_id', s.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      const daysSinceActivity = lastActivity?.created_at
+        ? (Date.now() - new Date(lastActivity.created_at as string).getTime()) / 86_400_000
+        : null
+
+      const isAtRisk =
+        (avgMastery !== null && avgMastery < 0.3) ||
+        (daysSinceActivity !== null && daysSinceActivity > 5) ||
+        (daysSinceActivity === null && mastery && mastery.length === 0)
+
+      results.push({
         userId: s.id as string,
         displayName: s.display_name as string,
         email: s.email as string,
-        isAtRisk: false,
-      }))
-      .filter((student) => student.isAtRisk)
+        isAtRisk,
+        avgMastery,
+        daysSinceActivity: daysSinceActivity ? Math.round(daysSinceActivity) : null,
+      })
+    }
+
+    return results.filter((s) => s.isAtRisk)
   })
