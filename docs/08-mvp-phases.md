@@ -25,15 +25,14 @@ Phase 1 completes this loop. Every phase after it adds more power to the same lo
 - [ ] Drizzle ORM connected, first query working
 - [ ] tRPC setup: router, context (Supabase client + user session), `user.getProfile` procedure
 - [ ] Trigger.dev project created, dev CLI connected, health task deployed
-- [ ] Helicone proxy configured (wrap all LLM calls from day one — OpenAI, Anthropic, Google)
-- [ ] Langfuse project created, SDK initialized
+- [ ] Langfuse project created, SDK initialized (LLM observability)
 - [ ] CI pipeline: lint, typecheck, build checks on every PR
 - [ ] Pre-commit hooks: lint-staged + file-size check (≤ 400 lines)
 - [ ] Environment variables documented in `.env.example` for each app/service
 
 ### Definition of done
 
-`pnpm dev` starts the web app. `user.getProfile` tRPC call returns data from Supabase. Trigger.dev dashboard shows the health task running. Helicone dashboard shows the test request.
+`pnpm dev` starts the web app. `user.getProfile` tRPC call returns data from Supabase. Trigger.dev dashboard shows the health task running. Langfuse dashboard shows traces.
 
 ---
 
@@ -42,6 +41,7 @@ Phase 1 completes this loop. Every phase after it adds more power to the same lo
 ### Deliverables
 
 **Auth:**
+
 - [ ] Supabase Auth configured: email/password + Google OAuth
 - [ ] Login page, register page, email verification flow
 - [ ] Auth middleware: redirect unauthenticated users to `/login`
@@ -49,6 +49,7 @@ Phase 1 completes this loop. Every phase after it adds more power to the same lo
 - [ ] Protected routes working
 
 **Onboarding:**
+
 - [ ] Onboarding flow (shown once, gated by `onboarding_completed = false`)
   - Step 1: Name, learning goal
   - Step 2: Persona — tone preference, difficulty preference, interests (3 fields, keep it short)
@@ -57,6 +58,7 @@ Phase 1 completes this loop. Every phase after it adds more power to the same lo
 - [ ] `user.completeOnboarding` marks flag, redirects to dashboard
 
 **Dashboard:**
+
 - [ ] `/dashboard` layout: sidebar (workspace list, nav links) + topbar (user menu)
 - [ ] Workspace list on dashboard (empty state with "Create workspace" CTA)
 - [ ] Create workspace modal (name + description)
@@ -73,6 +75,7 @@ User can sign up → complete onboarding → see dashboard → create a workspac
 ### Deliverables
 
 **Upload UI:**
+
 - [ ] Document upload UI in workspace: drag-and-drop, file picker, max 50MB, supported types shown
 - [ ] Upload progress indicator
 - [ ] `document.initiateUpload` → get signed Supabase Storage URL → upload directly from browser
@@ -81,15 +84,17 @@ User can sign up → complete onboarding → see dashboard → create a workspac
 - [ ] Document list with status badges: Pending, Processing, Done, Failed
 
 **Processing pipeline (Trigger.dev + TypeScript):**
+
 - [ ] `process-document` task: parse → chunk → enrich → embed → store
-- [ ] Reducto integration (REST API) — document parsing (replaces LlamaParse, EOL May 2026)
+- [ ] Document parsing: unpdf for text-based PDFs, Mammoth for DOCX, Gemini OCR for scanned docs
 - [ ] Structure-aware chunker (see `07-ai-pipeline.md`)
 - [ ] Contextual chunk enrichment (Haiku generates context per chunk — 67% retrieval improvement)
-- [ ] Batch embedding generation via `text-embedding-3-large` through Helicone
+- [ ] Batch embedding generation via `text-embedding-3-large`
 - [ ] Chunks + embeddings stored in Supabase (transaction)
 - [ ] `document.status` updates: `processing` → `completed` / `failed`
 
 **Real-time progress:**
+
 - [ ] Supabase Realtime subscription on `jobs` table → live progress bar in UI
 - [ ] Job record updated at each pipeline step (0% → 25% → 50% → 75% → 100%)
 - [ ] Error state: show `processingError` if failed, offer retry button
@@ -105,17 +110,20 @@ Upload a 20-page PDF. Watch the progress bar move in real time. Document shows "
 ### Deliverables
 
 **Concept Extraction (Trigger.dev, runs after Phase 1B completes):**
+
 - [ ] `extract-concepts` task: sample chunks → LLM extraction → deduplicate → store
 - [ ] `concepts` + `concept_relations` + `chunk_concepts` tables populated
 - [ ] Concept deduplication (normalize names, merge near-duplicates)
 
 **Syllabus Generation (runs after all docs in upload batch complete):**
+
 - [ ] `generate-syllabus` task: documents → hierarchical outline (unit → topic → subtopic)
 - [ ] `syllabuses` + `syllabus_units` + `syllabus_topics` + `syllabus_topic_concepts` + `syllabus_topic_documents` tables populated
 - [ ] Syllabus drives lesson ordering in Phase 1D — concept topological order alone doesn't capture the narrative structure of a document (chapter → section → subsection)
 - [ ] `syllabus.get` and `syllabus.update` tRPC procedures (professor can reorder in Phase 2)
 
 **Document Role Classification (runs during `process-document`):**
+
 - [ ] `classifyDocumentRole()`: LLM classifies each document as `primary` | `supplementary` | `reference`
   - Heuristics: page count, heading structure, presence of table of contents, first 2000 chars
   - Confidence < 0.65 → default to `supplementary`, show confirmation prompt in UI
@@ -124,6 +132,7 @@ Upload a 20-page PDF. Watch the progress bar move in real time. Document shows "
 - [ ] Reference-role documents skip syllabus — they are RAG-only
 
 **Incremental Syllabus Update (when new document is added to existing workspace):**
+
 - [ ] `update-syllabus` task: classifies new doc role, then:
   - `reference` → no syllabus change
   - `supplementary` → `map-to-syllabus`: LLM maps doc to existing topics, links in `syllabus_topic_documents`
@@ -132,17 +141,20 @@ Upload a 20-page PDF. Watch the progress bar move in real time. Document shows "
 - [ ] Old syllabus version marked `superseded`; new version created — existing lessons preserve their `syllabus_topic_id` pointer to old version topics until user reviews
 
 **Multi-Document Batch Upload Coordination:**
+
 - [ ] When `upload_batch_id` is set: `process-document` defers syllabus synthesis until all batch members reach `completed`
 - [ ] Last document in batch triggers `generate-syllabus` or `update-syllabus` with all batch document IDs
 - [ ] Batch synthesis sees all documents at once → correct ordering (avoids A/B ordering conflicts when processed independently)
 
 **Lesson Staleness Notifications:**
+
 - [ ] `lessons.source_updated = true` set when: a contributing document is reprocessed, OR a new supplementary/primary doc maps to a lesson's topic
 - [ ] UI shows non-blocking notice on affected lessons: "This lesson may be outdated — a new document was added that covers this topic"
 - [ ] "Regenerate lesson" button — user-initiated only. Never auto-regenerate.
 - [ ] `LESSON_STALENESS_FLAGGED` event logged
 
 **Concept UI:**
+
 - [ ] Concepts tab in workspace: list view of all concepts with difficulty badge
 - [ ] Concept graph visualization (force-directed using D3 or react-force-graph)
   - Nodes = concepts, colored by mastery level (gray = unstudied)
@@ -165,6 +177,7 @@ After document processing completes, the Concepts tab shows an auto-generated co
 ### Deliverables
 
 **Generation (Trigger.dev, runs after concept extraction):**
+
 - [ ] `generate-lessons` task: concepts in topological order → persona-adapted lesson per cluster
 - [ ] PersonalizationEngine: `buildPersonaContext()` — turns Persona record into prompt instructions
 - [ ] Lesson generation prompt (v1), stored in `lib/ai/prompts/lesson-generation.v1.ts`
@@ -172,6 +185,7 @@ After document processing completes, the Concepts tab shows an auto-generated co
 - [ ] Lessons ordered by concept dependency (prerequisites first)
 
 **Lesson UI:**
+
 - [ ] Lessons tab: ordered list with completion status (checkmark, progress ring)
 - [ ] Lesson reader at `/workspace/[id]/lessons/[lessonId]`
   - Markdown rendered with syntax highlighting (code blocks), table support
@@ -194,6 +208,7 @@ After document ingestion, lessons auto-generate and appear in the Lessons tab or
 ### Deliverables
 
 **Chat infrastructure:**
+
 - [ ] `chat_sessions` + `chat_messages` tables (already in schema)
 - [ ] `chat.createSession`, `chat.listSessions`, `chat.getMessages`, `chat.persistUserMessage`, `chat.persistAssistantMessage` procedures
 - [ ] `/api/chat` AI SDK streaming route
@@ -204,6 +219,7 @@ After document ingestion, lessons auto-generate and appear in the Lessons tab or
 - [ ] FSRS `ai_requests` record on every chat LLM call
 
 **Chat UI:**
+
 - [ ] Chat tab in workspace: session list sidebar + active chat area
 - [ ] Lesson-level chat: chat panel inside the lesson reader (context = lesson's chunks)
 - [ ] Streaming message display (tokens appear as they arrive)
@@ -222,6 +238,7 @@ User asks a question about an uploaded document. Response streams in, cites spec
 ### Deliverables
 
 **Quizzes:**
+
 - [ ] `generate-quiz` Trigger.dev task
 - [ ] Quiz generation prompt (v1): Bloom's-tagged, 4 question types minimum (MCQ, short_answer, true_false, fill_blank)
 - [ ] Quiz UI at `/workspace/[id]/quiz/[quizId]`
@@ -236,6 +253,7 @@ User asks a question about an uploaded document. Response streams in, cites spec
 - [ ] `QUIZ_COMPLETED` event logged
 
 **Flashcards + FSRS:**
+
 - [ ] `generate-flashcards` Trigger.dev task
 - [ ] `ts-fsrs` integrated in `@learn-x/utils/fsrs.ts`
 - [ ] `flashcard.submitReview` runs FSRS algorithm, updates scheduling fields
@@ -265,6 +283,7 @@ User generates a quiz from a lesson → takes it → gets per-question AI feedba
 - [ ] `analytics.getDashboard` — streak, total minutes, total mastered
 
 **Mastery UI:**
+
 - [ ] Mastery tab in workspace
   - Concept heatmap: grid of concepts colored green (≥0.8), yellow (0.4–0.8), red (<0.4)
   - Hovering a concept shows: mastery %, last studied, quiz score avg, flashcard retention
@@ -284,6 +303,7 @@ After completing some lessons and quizzes, the mastery heatmap reflects actual p
 ## Phase 1 Complete
 
 A student can:
+
 1. Sign up, set learning preferences
 2. Create a workspace, upload course documents
 3. Watch documents process with real-time progress
@@ -302,6 +322,7 @@ A student can:
 ## Phase 2: Retention + Institutional Foundation (after Phase 1 ships and is solid)
 
 **Retention layer:**
+
 - Audio recaps — two-host conversation format (ElevenLabs dual-voice, script via LLM); Cloudflare R2 storage
 - Audio quiz interruptions — audio pauses at timestamps, quiz question shown, resumes on answer; directly differentiates vs NotebookLM which has no quiz interruptions
 - Daily study plans generated from mastery state + declared schedule
@@ -311,6 +332,7 @@ A student can:
 - Study notifications (daily digest: "3 flashcards due, 1 concept flagged as fading")
 
 **Exam system (formal, distinct from quizzes):**
+
 - `generate-exam` Trigger.dev task — Bloom's-tagged, timed, configurable question mix
 - Timed exam delivery UI — countdown timer, one question at a time or scrollable, no immediate feedback
 - Exam scoring on submission — score + per-question review after completion
@@ -320,6 +342,7 @@ A student can:
 - Mastery records updated after exam completion
 
 **Professor / instructor tools (grassroots institutional adoption):**
+
 - InstructorProfile: professor account type with course management capabilities
 - Course creation: professor creates a Course, uploads Documents, system generates Syllabus + Lessons
 - Student roster: invite students via email or join code; students get pre-seeded Workspace
@@ -328,7 +351,8 @@ A student can:
 - FERPA DPA template: must exist before any professor pilot involves student data — prepare in Phase 1, finalize for Phase 2
 
 **Python AI service introduction:**
-- Reducto → Docling self-hosted for better table handling on complex PDFs
+
+- Docling self-hosted for better table handling on complex PDFs
 - Custom reranker (Cohere or local cross-encoder) when retrieval quality needs improvement
 
 ## Phase 3: Platform Expansion + Institutional Sales

@@ -15,4 +15,5 @@ export const MODEL_ROUTES = {
   LESSON_GENERATION: process.env.LESSON_MODEL ?? 'claude-sonnet-4-6',
   QUIZ_GENERATION: process.env.QUIZ_MODEL ?? 'gemini-2.0-flash-lite',
   FLASHCARD_GENERATION: process.env.FLASHCARD_MODEL ?? 'gemini-2.0-flash-lite',
+  FAST_GENERATION: process.env.FAST_MODEL ?? 'gemini-2.0-flash-lite',
 } as const

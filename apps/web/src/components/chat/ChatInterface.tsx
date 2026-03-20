@@ -64,16 +64,12 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-8 space-y-8 custom-scrollbar">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6 shadow-inner border border-primary/20">
-              <Sparkles className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-bold mb-2">How can I help you learn?</h2>
-            <p className="text-muted-foreground max-w-md">
-              I have full context of your workspace documents. Ask me to explain concepts, summarize
-              readings, or generate practice questions.
-            </p>
-          </div>
+          <EmptyState
+            workspaceId={workspaceId}
+            onSelect={(q) => {
+              sendMessage({ text: q })
+            }}
+          />
         )}
 
         {messages.map((m) => {
@@ -131,6 +127,57 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
             AI Coach can make mistakes. Verify important information.
           </span>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({
+  workspaceId,
+  onSelect,
+}: {
+  workspaceId: string
+  onSelect: (q: string) => void
+}) {
+  const { data: concepts } = trpc.concept.list.useQuery({ workspaceId })
+  const topConcepts = (concepts ?? []).slice(0, 3)
+
+  const starters =
+    topConcepts.length > 0
+      ? [
+          `Explain "${topConcepts[0]?.name}" in simple terms`,
+          ...(topConcepts[1]
+            ? [`How does "${topConcepts[0]?.name}" relate to "${topConcepts[1]?.name}"?`]
+            : []),
+          ...(topConcepts[2] ? [`Give me practice questions about "${topConcepts[2]?.name}"`] : []),
+        ]
+      : [
+          'Summarize the key ideas from my documents',
+          'What are the most important concepts I should focus on?',
+          'Generate practice questions from this material',
+        ]
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full text-center">
+      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6 shadow-inner border border-primary/20">
+        <Sparkles className="w-8 h-8" />
+      </div>
+      <h2 className="text-2xl font-bold mb-2">How can I help you learn?</h2>
+      <p className="text-muted-foreground max-w-md mb-8">
+        I have full context of your workspace documents. Ask me to explain concepts, summarize
+        readings, or generate practice questions.
+      </p>
+      <div className="flex flex-col gap-2 w-full max-w-md">
+        {starters.map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() => onSelect(q)}
+            className="text-left rounded-xl border border-border/50 bg-card/40 px-4 py-3 text-sm text-muted-foreground hover:text-foreground hover:bg-card/80 hover:border-primary/30 transition-all"
+          >
+            {q}
+          </button>
+        ))}
       </div>
     </div>
   )

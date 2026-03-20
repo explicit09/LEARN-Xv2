@@ -1,4 +1,14 @@
-import { boolean, integer, jsonb, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import {
+  boolean,
+  integer,
+  jsonb,
+  pgTable,
+  real,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core'
 import { concepts, lessons, users, workspaces } from './schema'
 
 export const quizzes = pgTable('quizzes', {
@@ -114,3 +124,28 @@ export const flashcardReviews = pgTable('flashcard_reviews', {
   scheduledDays: real('scheduled_days').notNull().default(0),
   reviewedAt: timestamp('reviewed_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+// ============================================================
+// Mastery Records
+// ============================================================
+
+export const masteryRecords = pgTable(
+  'mastery_records',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    conceptId: uuid('concept_id')
+      .notNull()
+      .references(() => concepts.id, { onDelete: 'cascade' }),
+    workspaceId: uuid('workspace_id')
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    masteryLevel: real('mastery_level').notNull().default(0),
+    source: text('source').notNull().default('lesson'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('mastery_records_user_concept_idx').on(table.userId, table.conceptId)],
+)

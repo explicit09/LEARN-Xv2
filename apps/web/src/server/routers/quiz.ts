@@ -158,6 +158,14 @@ export const quizRouter = createTRPCRouter({
           ? input.userAnswer.trim().toLowerCase() === question.correct_answer.trim().toLowerCase()
           : null
 
+      // Generate feedback based on correctness
+      const feedback =
+        isCorrect === true
+          ? `Correct! The answer is "${question.correct_answer}".`
+          : isCorrect === false
+            ? `Incorrect. The correct answer is "${question.correct_answer}".`
+            : null
+
       const { data: existing } = await ctx.supabase
         .from('quiz_responses')
         .select('id')
@@ -180,7 +188,7 @@ export const quizRouter = createTRPCRouter({
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message })
         }
 
-        return updated
+        return { ...updated, feedback, correct_answer: question.correct_answer }
       }
 
       const { data: response, error } = await ctx.supabase
@@ -197,7 +205,7 @@ export const quizRouter = createTRPCRouter({
       if (error || !response)
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message })
 
-      return response
+      return { ...response, feedback, correct_answer: question.correct_answer }
     }),
 
   completeAttempt: protectedProcedure
@@ -235,6 +243,41 @@ export const quizRouter = createTRPCRouter({
 
       if (error || !updated)
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message })
+
+      // Upsert mastery records for quiz concepts
+      const { data: questions } = await ctx.supabase
+        .from('quiz_questions')
+        .select('concept_id')
+        .eq('quiz_id', attempt.quiz_id)
+        .not('concept_id', 'is', null)
+
+      const conceptIds = [...new Set((questions ?? []).map((q) => q.concept_id as string))]
+      if (conceptIds.length > 0) {
+        const masteryLevel = Math.min(0.3 + score * 0.5, 1.0) // 0.3 base + up to 0.5 from score
+        const masteryRows = conceptIds.map((conceptId) => ({
+          user_id: userId,
+          concept_id: conceptId,
+          workspace_id: attempt.workspace_id,
+          mastery_level: masteryLevel,
+          source: 'quiz',
+        }))
+        await ctx.supabase
+          .from('mastery_records')
+          .upsert(masteryRows, { onConflict: 'user_id,concept_id', ignoreDuplicates: false })
+      }
+
+      // Log QUIZ_COMPLETED event
+      await ctx.supabase.from('ai_requests').insert({
+        workspace_id: attempt.workspace_id,
+        user_id: userId,
+        model: 'n/a',
+        provider: 'system',
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        cost_usd: 0,
+        latency_ms: 0,
+        task_name: 'QUIZ_COMPLETED',
+      })
 
       return updated
     }),

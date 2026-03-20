@@ -2,7 +2,7 @@
 
 ## Task: Phase 0 — Foundations
 
-**Goal:** Scaffold the full monorepo so `pnpm dev` starts the web app, `user.getProfile` tRPC call returns data from Supabase, Trigger.dev health task runs, and Helicone logs a test request.
+**Goal:** Scaffold the full monorepo so `pnpm dev` starts the web app, `user.getProfile` tRPC call returns data from Supabase, and Trigger.dev health task runs.
 **Phase:** 0
 
 ### Summary

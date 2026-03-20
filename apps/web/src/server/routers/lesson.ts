@@ -1,4 +1,5 @@
 import { TRPCError } from '@trpc/server'
+import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createTRPCRouter, protectedProcedure } from '../trpc'
 import {
@@ -44,7 +45,9 @@ export const lessonRouter = createTRPCRouter({
 
     const { data, error } = await ctx.supabase
       .from('lessons')
-      .select('id, title, order_index, summary, is_completed, completed_at, created_at')
+      .select(
+        'id, title, order_index, summary, is_completed, completed_at, source_updated, created_at',
+      )
       .eq('workspace_id', input.workspaceId)
       .order('order_index', { ascending: true })
 
@@ -82,13 +85,45 @@ export const lessonRouter = createTRPCRouter({
       isCompleted: data.is_completed as boolean,
       completedAt: data.completed_at as string | null,
       syllabusTopicId: data.syllabus_topic_id as string | null,
+      sourceUpdated: data.source_updated as boolean,
       createdAt: data.created_at as string,
       updatedAt: data.updated_at as string,
     }
   }),
 
   /**
-   * Mark a lesson as complete.
+   * Mark a lesson as started (records LESSON_STARTED event).
+   */
+  markStarted: protectedProcedure
+    .input(z.object({ id: z.string().uuid(), workspaceId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+      await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
+
+      await ctx.supabase
+        .from('lessons')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', input.id)
+        .eq('workspace_id', input.workspaceId)
+
+      // Log LESSON_STARTED event
+      await ctx.supabase.from('ai_requests').insert({
+        workspace_id: input.workspaceId,
+        user_id: userId,
+        model: 'n/a',
+        provider: 'system',
+        prompt_tokens: 0,
+        completion_tokens: 0,
+        cost_usd: 0,
+        latency_ms: 0,
+        task_name: 'LESSON_STARTED',
+      })
+
+      return { started: true }
+    }),
+
+  /**
+   * Mark a lesson as complete. Upserts mastery records for linked concepts.
    */
   markComplete: protectedProcedure.input(markCompleteSchema).mutation(async ({ ctx, input }) => {
     const userId = await resolveUserId(ctx.supabase, ctx.user.id)
@@ -108,12 +143,96 @@ export const lessonRouter = createTRPCRouter({
 
     if (error || !data) throw new TRPCError({ code: 'NOT_FOUND', message: 'Lesson not found' })
 
+    // Upsert mastery records for this lesson's concepts
+    const { data: lessonConcepts } = await ctx.supabase
+      .from('lesson_concepts')
+      .select('concept_id')
+      .eq('lesson_id', input.id)
+
+    if (lessonConcepts && lessonConcepts.length > 0) {
+      const masteryRows = lessonConcepts.map((lc) => ({
+        user_id: userId,
+        concept_id: lc.concept_id,
+        workspace_id: input.workspaceId,
+        mastery_level: 0.3, // lesson completion = initial mastery
+        source: 'lesson',
+      }))
+      await ctx.supabase
+        .from('mastery_records')
+        .upsert(masteryRows, { onConflict: 'user_id,concept_id', ignoreDuplicates: false })
+    }
+
+    // Log LESSON_COMPLETED event
+    await ctx.supabase.from('ai_requests').insert({
+      workspace_id: input.workspaceId,
+      user_id: userId,
+      model: 'n/a',
+      provider: 'system',
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      cost_usd: 0,
+      latency_ms: 0,
+      task_name: 'LESSON_COMPLETED',
+    })
+
     return {
       id: data.id as string,
       isCompleted: data.is_completed as boolean,
       completedAt: data.completed_at as string | null,
     }
   }),
+
+  /**
+   * Regenerate a single lesson that was flagged as stale (source_updated = true).
+   */
+  regenerate: protectedProcedure
+    .input(z.object({ id: z.string().uuid(), workspaceId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+      await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
+
+      const { data: lesson, error } = await ctx.supabase
+        .from('lessons')
+        .select('id, syllabus_topic_id')
+        .eq('id', input.id)
+        .eq('workspace_id', input.workspaceId)
+        .single()
+      if (error || !lesson) throw new TRPCError({ code: 'NOT_FOUND', message: 'Lesson not found' })
+
+      // Create job
+      const { data: job, error: jobError } = await ctx.supabase
+        .from('jobs')
+        .insert({
+          workspace_id: input.workspaceId,
+          user_id: userId,
+          type: 'regenerate_lesson',
+          status: 'pending',
+          progress: 0,
+          metadata: { lesson_id: input.id },
+        })
+        .select('id')
+        .single()
+      if (jobError) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' })
+
+      // Clear stale flag
+      await ctx.supabase
+        .from('lessons')
+        .update({ source_updated: false, updated_at: new Date().toISOString() })
+        .eq('id', input.id)
+
+      // Best-effort trigger
+      try {
+        const { generateLessons } = await import('@/../../../trigger/src/jobs/generate-lessons')
+        await generateLessons.trigger({
+          workspaceId: input.workspaceId,
+          userId,
+        })
+      } catch (err) {
+        console.error('[lesson.regenerate] Trigger.dev call failed:', err)
+      }
+
+      return { jobId: job!.id as string }
+    }),
 
   /**
    * Enqueue lesson generation job for a workspace.

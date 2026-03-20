@@ -66,7 +66,7 @@ learn-x/
 │       │   │   ├── generator/        # Content generation orchestration
 │       │   │   ├── personalization/  # Persona-driven prompt building
 │       │   │   ├── knowledge/        # Concept extraction, graph building
-│       │   │   └── ai_client/        # Model router, Helicone proxy config
+│       │   │   └── ai_client/        # Model router config
 │       │   ├── models/               # Pydantic models
 │       │   ├── config/               # settings.py (pydantic-settings)
 │       │   └── db/                   # SQLAlchemy async + asyncpg
@@ -159,34 +159,45 @@ learn-x/
 ## Package Responsibilities
 
 ### `@learn-x/validators`
+
 The single source of truth for all data shapes. Zod schemas only.
+
 - No imports from other `@learn-x/*` packages
 - No business logic
 - Must be usable in both browser and Node.js environments
 
 ### `@learn-x/types`
+
 TypeScript types inferred from validators. Zero hand-written types.
+
 ```typescript
 export type Workspace = z.infer<typeof workspaceSchema>
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceInputSchema>
 ```
 
 ### `@learn-x/ui`
+
 Shared component library. Components are presentational — no data fetching, no tRPC calls.
+
 - `primitives/` — direct shadcn/ui installs (own the code)
 - `patterns/` — composite components for LEARN-X-specific UI patterns
 - `layouts/` — shell layouts used across workspace and dashboard views
 
 ### `@learn-x/api-client`
+
 The tRPC client factory and (Phase 2) the generated FastAPI TypeScript client.
+
 - `trpc.ts` sets up the typed tRPC client using `@learn-x/validators` inferred types
 - Consumers import from here, not directly from `@trpc/client`
 
 ### `@learn-x/utils`
+
 Pure utility functions. No React. No tRPC. No Supabase.
+
 - `fsrs.ts` wraps `ts-fsrs` so FSRS logic is in one place
 
 ### `trigger/`
+
 Not a package — a separate Trigger.dev project that deploys independently.
 Imports from `@learn-x/validators` and `@learn-x/types` but not from `apps/web`.
 
@@ -226,19 +237,19 @@ src/server/
 
 ## Naming Conventions
 
-| Thing | Convention | Example |
-|-------|-----------|---------|
-| Database tables | `snake_case` plural | `flashcard_sets`, `quiz_responses` |
-| Database columns | `snake_case` | `created_at`, `workspace_id` |
-| TypeScript types | `PascalCase` | `FlashcardSet`, `QuizResponse` |
-| Zod schemas | `camelCase` + `Schema` suffix | `flashcardSetSchema`, `createWorkspaceSchema` |
-| tRPC routers | `camelCase` | `flashcard`, `workspace` |
-| tRPC procedures | `camelCase` verb.noun | `flashcard.generateSet`, `workspace.create` |
-| React components | `PascalCase` | `FlashCard`, `QuizCard` |
-| Hooks | `use` prefix | `useWorkspace`, `useDueCards` |
-| Trigger.dev tasks | `kebab-case` | `process-document`, `generate-quiz` |
-| Files | `kebab-case` | `process-document.ts`, `flashcard-router.ts` |
-| Env variables | `SCREAMING_SNAKE_CASE` | `SUPABASE_SERVICE_ROLE_KEY` |
+| Thing             | Convention                    | Example                                       |
+| ----------------- | ----------------------------- | --------------------------------------------- |
+| Database tables   | `snake_case` plural           | `flashcard_sets`, `quiz_responses`            |
+| Database columns  | `snake_case`                  | `created_at`, `workspace_id`                  |
+| TypeScript types  | `PascalCase`                  | `FlashcardSet`, `QuizResponse`                |
+| Zod schemas       | `camelCase` + `Schema` suffix | `flashcardSetSchema`, `createWorkspaceSchema` |
+| tRPC routers      | `camelCase`                   | `flashcard`, `workspace`                      |
+| tRPC procedures   | `camelCase` verb.noun         | `flashcard.generateSet`, `workspace.create`   |
+| React components  | `PascalCase`                  | `FlashCard`, `QuizCard`                       |
+| Hooks             | `use` prefix                  | `useWorkspace`, `useDueCards`                 |
+| Trigger.dev tasks | `kebab-case`                  | `process-document`, `generate-quiz`           |
+| Files             | `kebab-case`                  | `process-document.ts`, `flashcard-router.ts`  |
+| Env variables     | `SCREAMING_SNAKE_CASE`        | `SUPABASE_SERVICE_ROLE_KEY`                   |
 
 ---
 
@@ -251,7 +262,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=        # server-only, never NEXT_PUBLIC_
 
 OPENAI_API_KEY=
-HELICONE_API_KEY=                 # Helicone proxy — wraps OpenAI
 
 TRIGGER_SECRET_KEY=
 

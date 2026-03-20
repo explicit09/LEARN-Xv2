@@ -1,7 +1,7 @@
 'use client'
 
 import { trpc } from '@/lib/trpc/client'
-import { FileText, FileSearch, Filter, CheckCircle2, Clock } from 'lucide-react'
+import { FileText, FileSearch, Filter, CheckCircle2, Clock, RotateCcw } from 'lucide-react'
 
 interface DocumentListProps {
   workspaceId: string
@@ -22,10 +22,10 @@ const STATUS_CONFIG: Record<string, { color: string; icon: React.ElementType }> 
 }
 
 export function DocumentList({ workspaceId }: DocumentListProps) {
+  const utils = trpc.useUtils()
   const { data: documents, isLoading } = trpc.document.list.useQuery(
     { workspaceId },
     {
-      // Poll every 3s while any document is still processing/uploading
       refetchInterval: (query) => {
         const docs = query.state.data
         const hasActive = docs?.some((d) =>
@@ -35,6 +35,10 @@ export function DocumentList({ workspaceId }: DocumentListProps) {
       },
     },
   )
+
+  const retryMutation = trpc.document.retryProcessing.useMutation({
+    onSuccess: () => utils.document.list.invalidate({ workspaceId }),
+  })
 
   if (isLoading) {
     return (
@@ -70,6 +74,7 @@ export function DocumentList({ workspaceId }: DocumentListProps) {
         const statusKey = doc.status as keyof typeof STATUS_CONFIG
         const statusConfig = (STATUS_CONFIG[statusKey] || STATUS_CONFIG.ready)!
         const StatusIcon = statusConfig.icon
+        const isFailed = statusKey === 'failed'
 
         return (
           <div
@@ -98,6 +103,21 @@ export function DocumentList({ workspaceId }: DocumentListProps) {
                   {doc.file_type as string}
                 </span>
               </div>
+
+              {isFailed && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    retryMutation.mutate({ documentId: doc.id as string })
+                  }}
+                  disabled={retryMutation.isPending}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  {retryMutation.isPending ? 'Retrying…' : 'Retry'}
+                </button>
+              )}
             </div>
           </div>
         )

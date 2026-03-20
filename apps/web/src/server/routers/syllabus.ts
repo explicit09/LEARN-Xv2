@@ -31,6 +31,57 @@ async function resolveWorkspace(
 }
 
 export const syllabusRouter = createTRPCRouter({
+  update: protectedProcedure
+    .input(
+      z.object({
+        workspaceId: z.string().uuid(),
+        syllabusId: z.string().uuid(),
+        units: z.array(
+          z.object({
+            id: z.string().uuid(),
+            orderIndex: z.number().int().min(0),
+            topics: z.array(
+              z.object({
+                id: z.string().uuid(),
+                orderIndex: z.number().int().min(0),
+              }),
+            ),
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+      await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
+
+      // Verify syllabus belongs to workspace
+      const { data: syllabus } = await ctx.supabase
+        .from('syllabuses')
+        .select('id')
+        .eq('id', input.syllabusId)
+        .eq('workspace_id', input.workspaceId)
+        .single()
+      if (!syllabus) throw new TRPCError({ code: 'NOT_FOUND', message: 'Syllabus not found' })
+
+      // Update unit and topic ordering
+      for (const unit of input.units) {
+        await ctx.supabase
+          .from('syllabus_units')
+          .update({ order_index: unit.orderIndex })
+          .eq('id', unit.id)
+          .eq('syllabus_id', input.syllabusId)
+        for (const topic of unit.topics) {
+          await ctx.supabase
+            .from('syllabus_topics')
+            .update({ order_index: topic.orderIndex })
+            .eq('id', topic.id)
+            .eq('unit_id', unit.id)
+        }
+      }
+
+      return { success: true }
+    }),
+
   get: protectedProcedure
     .input(z.object({ workspaceId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {

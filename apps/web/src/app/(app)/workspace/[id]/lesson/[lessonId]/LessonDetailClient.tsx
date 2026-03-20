@@ -5,7 +5,15 @@ import { trpc } from '@/lib/trpc/client'
 import { LessonRenderer } from '@/components/lesson/LessonRenderer'
 import { LessonChat } from '@/components/lesson/LessonChat'
 import type { LessonSection } from '@learn-x/validators'
-import { BookOpen, CheckCircle, ChevronLeft, ChevronRight, PlayCircle } from 'lucide-react'
+import {
+  BookOpen,
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  PlayCircle,
+  AlertTriangle,
+  RefreshCw,
+} from 'lucide-react'
 import { Button } from '@learn-x/ui'
 
 interface LessonDetailClientProps {
@@ -26,6 +34,13 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
   const utils = trpc.useUtils()
 
   const markComplete = trpc.lesson.markComplete.useMutation({
+    onSuccess: () => {
+      void utils.lesson.get.invalidate({ id: lessonId, workspaceId })
+      void utils.lesson.list.invalidate({ workspaceId })
+    },
+  })
+
+  const regenerate = trpc.lesson.regenerate.useMutation({
     onSuccess: () => {
       void utils.lesson.get.invalidate({ id: lessonId, workspaceId })
       void utils.lesson.list.invalidate({ workspaceId })
@@ -207,6 +222,27 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
               )}
             </div>
           </div>
+
+          {/* Stale Lesson Notice */}
+          {lesson.sourceUpdated && (
+            <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 max-w-4xl">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+              <p className="text-sm text-amber-200 flex-1">
+                New material was added that covers this topic. This lesson may be outdated.
+              </p>
+              <button
+                type="button"
+                onClick={() => regenerate.mutate({ id: lessonId, workspaceId })}
+                disabled={regenerate.isPending}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-semibold text-amber-400 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${regenerate.isPending ? 'animate-spin' : ''}`}
+                />
+                {regenerate.isPending ? 'Regenerating…' : 'Regenerate lesson'}
+              </button>
+            </div>
+          )}
 
           {/* Title Block */}
           <div className="mb-10 lg:mb-16 max-w-4xl">

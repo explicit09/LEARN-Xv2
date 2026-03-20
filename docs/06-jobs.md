@@ -5,6 +5,7 @@
 All long-running or AI-intensive work runs as Trigger.dev tasks. No exceptions (see Architecture Rule 1).
 
 **Why Trigger.dev:**
+
 - No execution timeouts — critical for processing 100-page documents
 - Native Supabase webhook integration
 - TypeScript-first, shares types with the rest of the monorepo
@@ -16,6 +17,7 @@ All long-running or AI-intensive work runs as Trigger.dev tasks. No exceptions (
 ## Job Lifecycle
 
 Every job has a corresponding row in the `jobs` table. This makes job state visible to:
+
 - The client (progress bars, status indicators)
 - Supabase Realtime subscriptions (live updates)
 - Logging/debugging
@@ -33,7 +35,8 @@ Trigger.dev tasks call `updateJob()` at key checkpoints. The `jobs` table has a 
 ```typescript
 // Inside any Trigger.dev task
 async function updateJob(jobId: string, update: Partial<JobUpdate>) {
-  await db.update(jobs)
+  await db
+    .update(jobs)
     .set({ ...update, updatedAt: new Date() })
     .where(eq(jobs.id, jobId))
   // Supabase Realtime picks this up and pushes to subscribed clients
@@ -44,18 +47,18 @@ async function updateJob(jobId: string, update: Partial<JobUpdate>) {
 
 ## Job Types
 
-| job_type | Trigger | Input | Output |
-|----------|---------|-------|--------|
-| `document_processing` | document.confirmUpload mutation | `{ documentId, workspaceId, userId }` | Chunks + embeddings stored |
-| `concept_extraction` | After document_processing completes | `{ workspaceId, documentId }` | Concepts + relations stored |
-| `lesson_generation` | After concept_extraction completes | `{ workspaceId, userId, conceptIds? }` | Lessons stored |
-| `quiz_generation` | quiz.generate mutation | `{ workspaceId, userId, lessonId?, conceptIds?, config }` | Quiz + questions stored |
-| `flashcard_generation` | flashcard.generateSet mutation | `{ workspaceId, userId, sourceType, sourceId, cardCount }` | FlashcardSet + cards stored |
-| `audio_generation` | audio.generate mutation | `{ workspaceId, userId, lessonId?, audioType, voiceConfig }` | audio_generations record with R2 URL |
-| `study_plan_generation` | studyPlan.generate mutation | `{ workspaceId, userId, targetDate?, hoursPerDay? }` | StudyGuide stored |
-| `syllabus_generation` | After document_processing completes (first doc in workspace) | `{ workspaceId, userId, documentId, batchId? }` | syllabuses + units + topics stored |
-| `syllabus_update` | After document_processing completes (subsequent doc, role = primary/supplementary) | `{ workspaceId, userId, newDocumentId, syllabusId }` | New syllabus version; old marked superseded; affected lessons flagged |
-| `syllabus_batch_synthesis` | After all docs in a batch reach 'completed' | `{ workspaceId, userId, documentIds, batchId }` | Holistic synthesis from all batch docs; single new syllabus version |
+| job_type                   | Trigger                                                                            | Input                                                        | Output                                                                |
+| -------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- |
+| `document_processing`      | document.confirmUpload mutation                                                    | `{ documentId, workspaceId, userId }`                        | Chunks + embeddings stored                                            |
+| `concept_extraction`       | After document_processing completes                                                | `{ workspaceId, documentId }`                                | Concepts + relations stored                                           |
+| `lesson_generation`        | After concept_extraction completes                                                 | `{ workspaceId, userId, conceptIds? }`                       | Lessons stored                                                        |
+| `quiz_generation`          | quiz.generate mutation                                                             | `{ workspaceId, userId, lessonId?, conceptIds?, config }`    | Quiz + questions stored                                               |
+| `flashcard_generation`     | flashcard.generateSet mutation                                                     | `{ workspaceId, userId, sourceType, sourceId, cardCount }`   | FlashcardSet + cards stored                                           |
+| `audio_generation`         | audio.generate mutation                                                            | `{ workspaceId, userId, lessonId?, audioType, voiceConfig }` | audio_generations record with R2 URL                                  |
+| `study_plan_generation`    | studyPlan.generate mutation                                                        | `{ workspaceId, userId, targetDate?, hoursPerDay? }`         | StudyGuide stored                                                     |
+| `syllabus_generation`      | After document_processing completes (first doc in workspace)                       | `{ workspaceId, userId, documentId, batchId? }`              | syllabuses + units + topics stored                                    |
+| `syllabus_update`          | After document_processing completes (subsequent doc, role = primary/supplementary) | `{ workspaceId, userId, newDocumentId, syllabusId }`         | New syllabus version; old marked superseded; affected lessons flagged |
+| `syllabus_batch_synthesis` | After all docs in a batch reach 'completed'                                        | `{ workspaceId, userId, documentIds, batchId }`              | Holistic synthesis from all batch docs; single new syllabus version   |
 
 ---
 
@@ -72,7 +75,11 @@ export const processDocument = task({
 
   run: async ({ documentId, workspaceId, userId, jobId }) => {
     try {
-      await updateJob(jobId, { status: 'running', progress: 0.05, progressMessage: 'Fetching document...' })
+      await updateJob(jobId, {
+        status: 'running',
+        progress: 0.05,
+        progressMessage: 'Fetching document...',
+      })
 
       // 1. Get document from DB, download from Supabase Storage
       const document = await db.query.documents.findFirst({ where: eq(documents.id, documentId) })
@@ -80,8 +87,8 @@ export const processDocument = task({
 
       await updateJob(jobId, { progress: 0.15, progressMessage: 'Parsing document...' })
 
-      // 2. Parse via Reducto REST API (LlamaParse EOL May 2026 — Reducto is the replacement)
-      const parsed = await reductoParseDocument(fileBuffer, document.fileType)
+      // 2. Parse document (unpdf for PDFs, Mammoth for DOCX, Gemini OCR fallback)
+      const parsed = await parseDocument(fileBuffer, document.fileType)
       // Returns: { text: string, pageCount: number, wordCount: number }
 
       await updateJob(jobId, { progress: 0.3, progressMessage: 'Chunking content...' })
@@ -96,36 +103,45 @@ export const processDocument = task({
       // Generates 50-100 token context per chunk using Haiku with cached full document
       const enrichedChunks = await enrichChunksWithContext(chunks, parsed.text)
 
-      await updateJob(jobId, { progress: 0.5, progressMessage: `Embedding ${chunks.length} chunks...` })
+      await updateJob(jobId, {
+        progress: 0.5,
+        progressMessage: `Embedding ${chunks.length} chunks...`,
+      })
 
-      // 5. Generate embeddings (batch, via Helicone → OpenAI)
+      // 5. Generate embeddings (batch, via OpenAI)
       // Embeds enrichedContent but stores original content for citations
-      const embeddings = await generateEmbeddings(enrichedChunks.map(c => c.enrichedContent))
+      const embeddings = await generateEmbeddings(enrichedChunks.map((c) => c.enrichedContent))
 
-      await updateJob(jobId, { progress: 0.65, progressMessage: 'Storing chunks and embeddings...' })
+      await updateJob(jobId, {
+        progress: 0.65,
+        progressMessage: 'Storing chunks and embeddings...',
+      })
 
       // 6. Store chunks + embeddings in a single transaction
       // Note: halfvec cast required at 3072 dims — see 07-ai-pipeline.md
       await db.transaction(async (tx) => {
-        const insertedChunks = await tx.insert(chunksTable).values(
-          chunks.map((c) => ({ ...c, documentId, workspaceId }))
-        ).returning()
+        const insertedChunks = await tx
+          .insert(chunksTable)
+          .values(chunks.map((c) => ({ ...c, documentId, workspaceId })))
+          .returning()
 
         await tx.insert(chunkEmbeddings).values(
           insertedChunks.map((chunk, i) => ({
             chunkId: chunk.id,
             embedding: sql`${JSON.stringify(embeddings[i])}::halfvec`,
             modelVersion: 'text-embedding-3-large',
-          }))
+          })),
         )
       })
 
       // 7. Update document status + word count, and workspace total token count
-      await db.update(documents)
+      await db
+        .update(documents)
         .set({ status: 'completed', wordCount: parsed.wordCount, pageCount: parsed.pageCount })
         .where(eq(documents.id, documentId))
 
-      await db.update(workspaces)
+      await db
+        .update(workspaces)
         .set({ totalTokenCount: sql`total_token_count + ${parsed.tokenCount}` })
         .where(eq(workspaces.id, workspaceId))
 
@@ -140,12 +156,13 @@ export const processDocument = task({
       await generateLessons.trigger({ workspaceId, userId })
 
       await updateJob(jobId, { status: 'completed', progress: 1.0, progressMessage: 'Done' })
-
     } catch (error) {
-      await db.update(documents).set({ status: 'failed', processingError: error.message })
+      await db
+        .update(documents)
+        .set({ status: 'failed', processingError: error.message })
         .where(eq(documents.id, documentId))
       await updateJob(jobId, { status: 'failed', errorMessage: error.message })
-      throw error  // Let Trigger.dev handle retry
+      throw error // Let Trigger.dev handle retry
     }
   },
 })
@@ -159,7 +176,10 @@ export const extractConcepts = task({
   retry: { maxAttempts: 2 },
 
   run: async ({ workspaceId, documentId, userId, jobId }) => {
-    await updateJob(jobId, { status: 'running', progressMessage: 'Extracting concepts from document...' })
+    await updateJob(jobId, {
+      status: 'running',
+      progressMessage: 'Extracting concepts from document...',
+    })
 
     // 1. Fetch all chunks for this document
     const chunks = await db.query.chunks.findMany({ where: eq(chunksTable.documentId, documentId) })
@@ -208,9 +228,9 @@ export const generateLessons = task({
 
     // 4. Generate in parallel batches (max 3 at a time to avoid rate limits)
     for (const batch of chunks(conceptClusters, 3)) {
-      await Promise.all(batch.map(cluster =>
-        generateSingleLesson({ cluster, workspaceId, userId, persona })
-      ))
+      await Promise.all(
+        batch.map((cluster) => generateSingleLesson({ cluster, workspaceId, userId, persona })),
+      )
       await updateJob(jobId, { progress: calculateProgress() })
     }
 
@@ -280,7 +300,8 @@ export const generateSyllabus = task({
     //    Confidence < 0.65 → default to 'supplementary', surface UI confirmation
     for (const doc of documents) {
       const { role, confidence } = await classifyDocumentRole(doc)
-      await db.update(documents)
+      await db
+        .update(documents)
         .set({ role, roleConfidence: confidence })
         .where(eq(documents.id, doc.id))
     }
@@ -288,13 +309,17 @@ export const generateSyllabus = task({
     await updateJob(jobId, { progress: 0.3, progressMessage: 'Generating syllabus outline...' })
 
     // 3. Primary docs drive the structure; supplementary docs enrich topics
-    const primaryDocs = documents.filter(d => d.role === 'primary')
-    const supplementaryDocs = documents.filter(d => d.role === 'supplementary')
+    const primaryDocs = documents.filter((d) => d.role === 'primary')
+    const supplementaryDocs = documents.filter((d) => d.role === 'supplementary')
 
     if (primaryDocs.length === 0) {
       // No primary doc — use supplementary docs to build a lightweight syllabus
       // or wait for user to designate a primary
-      await updateJob(jobId, { status: 'completed', progress: 1.0, progressMessage: 'No primary document — syllabus pending primary source' })
+      await updateJob(jobId, {
+        status: 'completed',
+        progress: 1.0,
+        progressMessage: 'No primary document — syllabus pending primary source',
+      })
       return
     }
 
@@ -303,43 +328,56 @@ export const generateSyllabus = task({
     // Returns: { units: [{ title, description, topics: [{ title, description }] }] }
 
     // 5. Embed each topic for future deduplication/merging during incremental updates
-    const topicTexts = outline.units.flatMap(u => u.topics.map(t => `${u.title}: ${t.title} — ${t.description}`))
+    const topicTexts = outline.units.flatMap((u) =>
+      u.topics.map((t) => `${u.title}: ${t.title} — ${t.description}`),
+    )
     const topicEmbeddings = await generateEmbeddings(topicTexts)
 
     await updateJob(jobId, { progress: 0.6, progressMessage: 'Storing syllabus...' })
 
     // 6. Store syllabus in a transaction
     await db.transaction(async (tx) => {
-      const [syllabus] = await tx.insert(syllabuses).values({
-        workspaceId,
-        version: 1,
-        status: 'active',
-        generatedBy: documentIds.length > 1 ? 'merged' : 'ai',
-      }).returning()
+      const [syllabus] = await tx
+        .insert(syllabuses)
+        .values({
+          workspaceId,
+          version: 1,
+          status: 'active',
+          generatedBy: documentIds.length > 1 ? 'merged' : 'ai',
+        })
+        .returning()
 
       let embeddingIdx = 0
       for (const [unitIdx, unit] of outline.units.entries()) {
-        const [dbUnit] = await tx.insert(syllabusUnits).values({
-          syllabusId: syllabus.id,
-          title: unit.title,
-          description: unit.description,
-          orderIndex: unitIdx,
-        }).returning()
+        const [dbUnit] = await tx
+          .insert(syllabusUnits)
+          .values({
+            syllabusId: syllabus.id,
+            title: unit.title,
+            description: unit.description,
+            orderIndex: unitIdx,
+          })
+          .returning()
 
         for (const [topicIdx, topic] of unit.topics.entries()) {
-          const [dbTopic] = await tx.insert(syllabusTopics).values({
-            syllabusId: syllabus.id,
-            unitId: dbUnit.id,
-            title: topic.title,
-            description: topic.description,
-            orderIndex: topicIdx,
-            embedding: sql`${JSON.stringify(topicEmbeddings[embeddingIdx++])}::halfvec`,
-          }).returning()
+          const [dbTopic] = await tx
+            .insert(syllabusTopics)
+            .values({
+              syllabusId: syllabus.id,
+              unitId: dbUnit.id,
+              title: topic.title,
+              description: topic.description,
+              orderIndex: topicIdx,
+              embedding: sql`${JSON.stringify(topicEmbeddings[embeddingIdx++])}::halfvec`,
+            })
+            .returning()
 
           // Link primary documents to topics they cover
-          await tx.insert(syllabusTopicDocuments).values(
-            primaryDocs.map(d => ({ topicId: dbTopic.id, documentId: d.id, isPrimary: true }))
-          )
+          await tx
+            .insert(syllabusTopicDocuments)
+            .values(
+              primaryDocs.map((d) => ({ topicId: dbTopic.id, documentId: d.id, isPrimary: true })),
+            )
         }
       }
 
@@ -349,7 +387,11 @@ export const generateSyllabus = task({
       }
     })
 
-    await updateJob(jobId, { status: 'completed', progress: 1.0, progressMessage: 'Syllabus ready' })
+    await updateJob(jobId, {
+      status: 'completed',
+      progress: 1.0,
+      progressMessage: 'Syllabus ready',
+    })
   },
 })
 ```
@@ -368,23 +410,39 @@ export const updateSyllabus = task({
 
     const newDoc = await db.query.documents.findFirst({ where: eq(documents.id, newDocumentId) })
     const { role, confidence } = await classifyDocumentRole(newDoc)
-    await db.update(documents).set({ role, roleConfidence: confidence }).where(eq(documents.id, newDocumentId))
+    await db
+      .update(documents)
+      .set({ role, roleConfidence: confidence })
+      .where(eq(documents.id, newDocumentId))
 
     if (role === 'reference') {
       // Reference docs are RAG-only — no syllabus update needed
-      await updateJob(jobId, { status: 'completed', progress: 1.0, progressMessage: 'Reference document — no syllabus update needed' })
+      await updateJob(jobId, {
+        status: 'completed',
+        progress: 1.0,
+        progressMessage: 'Reference document — no syllabus update needed',
+      })
       return
     }
 
     if (role === 'supplementary') {
       // Map this doc to existing topics, flag affected lessons as source_updated
-      await updateJob(jobId, { progress: 0.4, progressMessage: 'Mapping to existing syllabus topics...' })
+      await updateJob(jobId, {
+        progress: 0.4,
+        progressMessage: 'Mapping to existing syllabus topics...',
+      })
       await mapSupplementaryDocToSyllabus(newDocumentId, syllabusId)
       // Flag affected lessons
       const affectedLessons = await getAffectedLessons(syllabusId, newDocumentId)
-      await db.update(lessons)
+      await db
+        .update(lessons)
         .set({ sourceUpdated: true })
-        .where(inArray(lessons.id, affectedLessons.map(l => l.id)))
+        .where(
+          inArray(
+            lessons.id,
+            affectedLessons.map((l) => l.id),
+          ),
+        )
       await updateJob(jobId, { status: 'completed', progress: 1.0 })
       return
     }
@@ -393,7 +451,9 @@ export const updateSyllabus = task({
     await updateJob(jobId, { progress: 0.2, progressMessage: 'Extracting new document outline...' })
 
     const newOutline = await extractSyllabusOutline([newDoc])
-    const newTopicTexts = newOutline.units.flatMap(u => u.topics.map(t => `${u.title}: ${t.title} — ${t.description}`))
+    const newTopicTexts = newOutline.units.flatMap((u) =>
+      u.topics.map((t) => `${u.title}: ${t.title} — ${t.description}`),
+    )
     const newEmbeddings = await generateEmbeddings(newTopicTexts)
 
     // Fetch existing syllabus topic embeddings for comparison
@@ -416,26 +476,46 @@ export const updateSyllabus = task({
     await db.transaction(async (tx) => {
       // Increment syllabus version: mark old as superseded, create new
       await tx.update(syllabuses).set({ status: 'superseded' }).where(eq(syllabuses.id, syllabusId))
-      const [newSyllabus] = await tx.insert(syllabuses).values({
-        workspaceId,
-        version: sql`(SELECT MAX(version) FROM syllabuses WHERE workspace_id = ${workspaceId}) + 1`,
-        status: 'active',
-        generatedBy: 'merged',
-      }).returning()
+      const [newSyllabus] = await tx
+        .insert(syllabuses)
+        .values({
+          workspaceId,
+          version: sql`(SELECT MAX(version) FROM syllabuses WHERE workspace_id = ${workspaceId}) + 1`,
+          status: 'active',
+          generatedBy: 'merged',
+        })
+        .returning()
 
       // Clone merged topic tree into new syllabus version
-      await cloneSyllabusVersion(tx, syllabusId, newSyllabus.id, mergedTopics, newTopics, newDocumentId)
+      await cloneSyllabusVersion(
+        tx,
+        syllabusId,
+        newSyllabus.id,
+        mergedTopics,
+        newTopics,
+        newDocumentId,
+      )
     })
 
     // Flag affected lessons (topics that merged or were updated)
     if (affectedTopicIds.length > 0) {
       const affectedLessons = await getAffectedLessons(syllabusId, newDocumentId)
-      await db.update(lessons)
+      await db
+        .update(lessons)
         .set({ sourceUpdated: true })
-        .where(inArray(lessons.id, affectedLessons.map(l => l.id)))
+        .where(
+          inArray(
+            lessons.id,
+            affectedLessons.map((l) => l.id),
+          ),
+        )
     }
 
-    await updateJob(jobId, { status: 'completed', progress: 1.0, progressMessage: 'Syllabus updated' })
+    await updateJob(jobId, {
+      status: 'completed',
+      progress: 1.0,
+      progressMessage: 'Syllabus updated',
+    })
   },
 })
 ```

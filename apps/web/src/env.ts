@@ -7,11 +7,10 @@ export const env = createEnv({
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
     DATABASE_URL: z.string().url(),
 
-    // AI providers (all routed through Helicone)
+    // AI providers
     OPENAI_API_KEY: z.string().min(1),
     ANTHROPIC_API_KEY: z.string().min(1),
     GOOGLE_API_KEY: z.string().min(1),
-    HELICONE_API_KEY: z.string().min(1),
 
     // Trigger.dev
     TRIGGER_SECRET_KEY: z.string().min(1),
@@ -38,7 +37,6 @@ export const env = createEnv({
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
-    HELICONE_API_KEY: process.env.HELICONE_API_KEY,
     TRIGGER_SECRET_KEY: process.env.TRIGGER_SECRET_KEY,
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
