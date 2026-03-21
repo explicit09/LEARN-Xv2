@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { ChatInterface } from './ChatInterface'
 import { MessageSquare, Plus, Loader2, Trash2 } from 'lucide-react'
@@ -38,13 +38,14 @@ export function WorkspaceChatTab({ workspaceId }: WorkspaceChatTabProps) {
     },
   })
 
-  // Auto-select most recent session
-  useEffect(() => {
-    if (loadingSessions || sessionId) return
-    if (sessions && sessions.length > 0) {
-      setSessionId(sessions[0].id as string)
+  // Derive effective session: use explicit selection, or fall back to most recent
+  const effectiveSessionId = useMemo(() => {
+    if (sessionId) return sessionId
+    if (!loadingSessions && sessions && sessions.length > 0) {
+      return sessions[0].id as string
     }
-  }, [sessions, loadingSessions, sessionId])
+    return null
+  }, [sessionId, sessions, loadingSessions])
 
   const handleNewChat = () => {
     createSession.mutate({ workspaceId })
@@ -84,7 +85,7 @@ export function WorkspaceChatTab({ workspaceId }: WorkspaceChatTabProps) {
             <p className="text-xs text-muted-foreground text-center py-8">No conversations yet</p>
           )}
           {sortedSessions.map((session) => {
-            const isActive = (session.id as string) === sessionId
+            const isActive = (session.id as string) === effectiveSessionId
             const title = (session.title as string) || 'New conversation'
             const updatedAt = new Date(session.updated_at as string)
             const timeAgo = formatTimeAgo(updatedAt)
@@ -135,8 +136,12 @@ export function WorkspaceChatTab({ workspaceId }: WorkspaceChatTabProps) {
 
       {/* Chat content */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {sessionId ? (
-          <ChatWithMessages key={sessionId} sessionId={sessionId} workspaceId={workspaceId} />
+        {effectiveSessionId ? (
+          <ChatWithMessages
+            key={effectiveSessionId}
+            sessionId={effectiveSessionId}
+            workspaceId={workspaceId}
+          />
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">

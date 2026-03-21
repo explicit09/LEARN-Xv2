@@ -64,12 +64,14 @@ export function LessonChat({
   }, [isOpen])
 
   // Auto-open chat with selected text context
-  useEffect(() => {
-    if (selectedText && !isOpen) {
+  const [prevSelectedText, setPrevSelectedText] = useState('')
+  if (selectedText && selectedText !== prevSelectedText) {
+    setPrevSelectedText(selectedText)
+    if (!isOpen) {
       setIsOpen(true)
-      setChatInput(`Explain this: "${selectedText}"`)
     }
-  }, [selectedText]) // eslint-disable-line react-hooks/exhaustive-deps
+    setChatInput(`Explain this: "${selectedText}"`)
+  }
 
   async function handleSend(text?: string) {
     const content = text ?? chatInput

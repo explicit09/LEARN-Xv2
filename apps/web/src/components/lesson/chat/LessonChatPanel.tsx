@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useChat } from '@ai-sdk/react'
@@ -23,6 +23,10 @@ interface LessonChatPanelProps {
   onOpenChange?: ((open: boolean) => void) | undefined
 }
 
+const emptySubscribe = () => () => {}
+const returnTrue = () => true
+const returnFalse = () => false
+
 const DEFAULT_WIDTH = 480
 const MIN_WIDTH = 320
 const MAX_WIDTH = 640
@@ -35,21 +39,16 @@ export function LessonChatPanel({
   onClearSelection,
   onOpenChange,
 }: LessonChatPanelProps) {
-  const [mounted, setMounted] = useState(false)
+  const mounted = useSyncExternalStore(emptySubscribe, returnTrue, returnFalse)
   const [isOpen, setIsOpen] = useState(false)
   const [chatWidth, setChatWidth] = useState(DEFAULT_WIDTH)
   const [isResizing, setIsResizing] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [sessionCreated, setSessionCreated] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [prevSelectedText, setPrevSelectedText] = useState('')
   const [pinnedMessages, setPinnedMessages] = useState<Set<string>>(new Set())
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const lastSelectionRef = useRef('')
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   const createSession = trpc.chat.createSession.useMutation({
     onSuccess: () => setSessionCreated(true),
@@ -85,25 +84,22 @@ export function LessonChatPanel({
     onOpenChange?.(isOpen)
   }, [isOpen, onOpenChange])
 
-  // Track unread when collapsed
-  useEffect(() => {
-    if (!isOpen && messages.length > 0) {
-      const lastMsg = messages[messages.length - 1]
-      if (lastMsg?.role === 'assistant') {
-        setUnreadCount((prev) => prev + 1)
-      }
-    }
-  }, [messages.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Derive unread count: messages added since last time panel was open
+  const [seenMsgCount, setSeenMsgCount] = useState(0)
+  if (isOpen && seenMsgCount !== messages.length) {
+    setSeenMsgCount(messages.length)
+  }
+  const unreadCount = isOpen ? 0 : Math.max(0, messages.length - seenMsgCount)
 
-  // Text selection → auto-open chat
-  useEffect(() => {
-    if (selectedText && selectedText !== lastSelectionRef.current) {
-      lastSelectionRef.current = selectedText
+  // Text selection -> auto-open chat
+  if (selectedText && selectedText !== prevSelectedText) {
+    setPrevSelectedText(selectedText)
+    if (!isOpen) {
       setIsOpen(true)
-      setChatInput(`Explain this: "${selectedText}"`)
-      onClearSelection?.()
     }
-  }, [selectedText]) // eslint-disable-line react-hooks/exhaustive-deps
+    setChatInput(`Explain this: "${selectedText}"`)
+    onClearSelection?.()
+  }
 
   // Keyboard shortcut: Cmd/Ctrl + /
   useEffect(() => {
@@ -119,7 +115,6 @@ export function LessonChatPanel({
 
   const handleOpen = useCallback(() => {
     setIsOpen(true)
-    setUnreadCount(0)
   }, [])
 
   const handleClose = useCallback(() => {

@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { cn } from '@learn-x/utils'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -39,13 +39,7 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [isCollapsed, setIsCollapsed] = useState(false)
-
-  useEffect(() => {
-    if (pathname.includes('/workspace/')) {
-      setIsCollapsed(true)
-    }
-  }, [pathname])
+  const [isCollapsed, setIsCollapsed] = useState(pathname.includes('/workspace/'))
 
   async function handleSignOut() {
     const supabase = createClient()

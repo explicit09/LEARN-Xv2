@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { WorkspaceDocuments } from '@/components/document/WorkspaceDocuments'
@@ -28,6 +29,45 @@ import {
 } from 'lucide-react'
 import { Button, SpatialStatCard } from '@learn-x/ui'
 import { cn } from '@learn-x/utils'
+
+function OverviewSection({
+  eyebrow,
+  title,
+  body,
+  actionHref,
+  actionLabel,
+  children,
+}: {
+  eyebrow: string
+  title: string
+  body: string
+  actionHref?: string | undefined
+  actionLabel?: string | undefined
+  children: ReactNode
+}) {
+  return (
+    <section className="overflow-hidden rounded-[32px] border border-border/60 bg-card/70 shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-border/60 px-5 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-2xl">
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
+            {eyebrow}
+          </p>
+          <h3 className="mt-2 text-2xl font-bold tracking-tight text-foreground">{title}</h3>
+          <p className="mt-2 text-sm leading-7 text-muted-foreground">{body}</p>
+        </div>
+        {actionHref && actionLabel ? (
+          <Button asChild variant="outline" className="rounded-xl">
+            <Link href={actionHref}>
+              {actionLabel}
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        ) : null}
+      </div>
+      <div>{children}</div>
+    </section>
+  )
+}
 
 interface WorkspacePageProps {
   params: Promise<{ id: string }>
@@ -86,45 +126,6 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
   const workspaceDescription =
     (workspace.description as string | null) ||
     'Structured learning materials and generated study paths.'
-
-  function OverviewSection({
-    eyebrow,
-    title,
-    body,
-    actionHref,
-    actionLabel,
-    children,
-  }: {
-    eyebrow: string
-    title: string
-    body: string
-    actionHref?: string | undefined
-    actionLabel?: string | undefined
-    children: React.ReactNode
-  }) {
-    return (
-      <section className="overflow-hidden rounded-[32px] border border-border/60 bg-card/70 shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-border/60 px-5 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
-              {eyebrow}
-            </p>
-            <h3 className="mt-2 text-2xl font-bold tracking-tight text-foreground">{title}</h3>
-            <p className="mt-2 text-sm leading-7 text-muted-foreground">{body}</p>
-          </div>
-          {actionHref && actionLabel ? (
-            <Button asChild variant="outline" className="rounded-xl">
-              <Link href={actionHref}>
-                {actionLabel}
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-          ) : null}
-        </div>
-        <div>{children}</div>
-      </section>
-    )
-  }
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-background flex flex-col">

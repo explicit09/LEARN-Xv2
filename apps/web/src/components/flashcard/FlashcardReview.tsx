@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { FlashcardCard } from './FlashcardCard'
 import { CalendarCheck2, ActivitySquare } from 'lucide-react'
@@ -17,16 +17,10 @@ export function FlashcardReview({ workspaceId }: FlashcardReviewProps) {
       void utils.flashcard.getDue.invalidate({ workspaceId })
     },
   })
-  const [index, setIndex] = useState(0)
+  const [rawIndex, setRawIndex] = useState(0)
 
-  useEffect(() => {
-    if (!due?.length) {
-      setIndex(0)
-      return
-    }
-
-    setIndex((current) => Math.min(current, due.length - 1))
-  }, [due])
+  // Derive a safe index: clamp to valid range whenever `due` changes length
+  const index = !due?.length ? 0 : Math.min(rawIndex, due.length - 1)
 
   if (isLoading) {
     return <div className="h-64 animate-pulse rounded-3xl bg-muted/50 border border-border" />
@@ -54,9 +48,9 @@ export function FlashcardReview({ workspaceId }: FlashcardReviewProps) {
   async function handleRate(rating: 1 | 2 | 3 | 4) {
     await submitReview.mutateAsync({ cardId: (card as { id: string }).id, rating })
     if (index + 1 < (due?.length ?? 0)) {
-      setIndex((i) => i + 1)
+      setRawIndex((i) => i + 1)
     } else {
-      setIndex(0)
+      setRawIndex(0)
     }
   }
 
