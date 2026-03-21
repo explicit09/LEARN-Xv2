@@ -82,10 +82,24 @@ export async function POST(req: NextRequest) {
       persona,
     })
 
+    const startMs = Date.now()
     const result = streamText({
       model: anthropic(MODEL_ROUTES.LESSON_GENERATION),
       output: Output.object({ schema: lessonOutputSchema }),
       prompt,
+      async onFinish({ usage }) {
+        await supabase.from('ai_requests').insert({
+          workspace_id: workspaceId,
+          user_id: userRow.id,
+          model: MODEL_ROUTES.LESSON_GENERATION,
+          provider: 'anthropic',
+          prompt_tokens: usage.promptTokens ?? 0,
+          completion_tokens: usage.completionTokens ?? 0,
+          cost_usd: 0,
+          latency_ms: Date.now() - startMs,
+          task_name: 'lesson-stream',
+        })
+      },
     })
 
     return result.toTextStreamResponse()

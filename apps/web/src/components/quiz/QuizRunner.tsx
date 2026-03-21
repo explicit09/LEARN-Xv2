@@ -41,6 +41,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
   const [lastResult, setLastResult] = useState<{
     isCorrect: boolean | null
     feedback: string | null
+    correctAnswer: string | null
   } | null>(null)
   const [step, setStep] = useState<Step>('ready')
   const [finalScore, setFinalScore] = useState<number | null>(null)
@@ -55,7 +56,6 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
     question: string
     question_type: string
     options: string[] | null
-    correct_answer: string
   }>
 
   async function handleStart() {
@@ -79,16 +79,22 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
       questionId: q.id,
       userAnswer,
     })
-    const feedback = (result as { feedback?: string | null }).feedback ?? null
-    setLastResult({ isCorrect: result.is_correct, feedback })
+    const typedResult = result as {
+      is_correct: boolean | null
+      feedback?: string | null
+      correct_answer?: string | null
+    }
+    const feedback = typedResult.feedback ?? null
+    const correctAnswer = typedResult.correct_answer ?? null
+    setLastResult({ isCorrect: typedResult.is_correct, feedback, correctAnswer })
     setResults((prev) => [
       ...prev,
       {
         questionIndex: currentIndex,
         question: q.question,
         userAnswer,
-        correctAnswer: q.correct_answer,
-        isCorrect: result.is_correct,
+        correctAnswer: correctAnswer ?? '',
+        isCorrect: typedResult.is_correct,
         feedback,
       },
     ])
@@ -310,14 +316,14 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
           >
             <div className="flex items-center gap-2">
               {lastResult.isCorrect === null ? (
-                <span>Model answer: {q.correct_answer}</span>
+                <span>Model answer: {lastResult.correctAnswer}</span>
               ) : lastResult.isCorrect ? (
                 <>
                   <CheckCircle className="w-4 h-4" /> Correct!
                 </>
               ) : (
                 <>
-                  <XCircle className="w-4 h-4" /> Incorrect. Answer: {q.correct_answer}
+                  <XCircle className="w-4 h-4" /> Incorrect. Answer: {lastResult.correctAnswer}
                 </>
               )}
             </div>

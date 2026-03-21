@@ -239,7 +239,7 @@ export const examRouter = createTRPCRouter({
 
     const { data: attempt } = await ctx.supabase
       .from('exam_attempts')
-      .select('id, exam_id, completed_at')
+      .select('id, exam_id, completed_at, started_at')
       .eq('id', input.attemptId)
       .eq('user_id', userId)
       .single()
@@ -289,15 +289,6 @@ export const examRouter = createTRPCRouter({
         if (isCorrect) correct++
       }
 
-      await ctx.supabase
-        .from('exam_responses')
-        .update({
-          is_correct: isCorrect,
-          feedback: question.explanation ?? null,
-          points_earned: isCorrect ? 1 : isCorrect === false ? 0 : null,
-        })
-        .eq('id', response.id)
-
       reviewed.push({
         questionId: response.question_id,
         userAnswer: response.user_answer,
@@ -307,16 +298,24 @@ export const examRouter = createTRPCRouter({
       })
     }
 
-    const score = graded > 0 ? correct / graded : 0
+    // Batch update all responses at once
+    const updatePromises = (responses ?? []).map((response) => {
+      const question = questionsMap.get(response.question_id)
+      if (!question) return Promise.resolve()
+      const r = reviewed.find((rv) => rv.questionId === response.question_id)
+      return ctx.supabase
+        .from('exam_responses')
+        .update({
+          is_correct: r?.isCorrect ?? null,
+          feedback: question.explanation ?? null,
+          points_earned: r?.isCorrect ? 1 : r?.isCorrect === false ? 0 : null,
+        })
+        .eq('id', response.id)
+    })
+    await Promise.all(updatePromises)
 
-    const startedAtRow = await ctx.supabase
-      .from('exam_attempts')
-      .select('started_at')
-      .eq('id', input.attemptId)
-      .single()
-    const startedAt = startedAtRow.data?.started_at
-      ? new Date(startedAtRow.data.started_at as string)
-      : new Date()
+    const score = graded > 0 ? correct / graded : 0
+    const startedAt = attempt.started_at ? new Date(attempt.started_at as string) : new Date()
     const timeSpentSeconds = Math.floor((Date.now() - startedAt.getTime()) / 1000)
 
     await ctx.supabase

@@ -82,9 +82,7 @@ export const quizRouter = createTRPCRouter({
 
     const { data: questions } = await ctx.supabase
       .from('quiz_questions')
-      .select(
-        'id, question, question_type, options, correct_answer, bloom_level, concept_id, order_index',
-      )
+      .select('id, question, question_type, options, bloom_level, concept_id, order_index')
       .eq('quiz_id', input.id)
       .order('order_index', { ascending: true })
 
