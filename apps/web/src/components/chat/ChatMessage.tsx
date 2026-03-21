@@ -1,4 +1,28 @@
+'use client'
+
+import { useState, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import rehypeRaw from 'rehype-raw'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { Copy, Check } from 'lucide-react'
 import { CitationPopover } from './CitationPopover'
+
+/** Convert markdown formatting inside HTML blocks to HTML tags */
+function preprocessContent(content: string): string {
+  return content
+    .replace(/<details>\s*\n?\s*<summary>/g, '\n\n<details><summary>')
+    .replace(/<\/details>/g, '</details>\n\n')
+    .replace(/<details>([\s\S]*?)<\/details>/g, (match) => {
+      return match
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+    })
+}
 
 interface ChatMessageProps {
   role: 'user' | 'assistant' | 'system'
@@ -6,182 +30,132 @@ interface ChatMessageProps {
   citedChunkIds?: string[] | null
 }
 
-/** Render inline markdown: bold, italic, inline code. Input is already HTML-escaped. */
-function renderInline(line: string): string {
-  return line
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(
-      /`([^`]+)`/g,
-      '<code class="rounded bg-muted/60 px-1 py-0.5 text-xs font-mono">$1</code>',
-    )
-}
-
-type Block =
-  | { type: 'heading'; level: number; html: string }
-  | { type: 'hr' }
-  | { type: 'paragraph'; html: string }
-  | { type: 'code_block'; lines: string[] }
-  | { type: 'list'; items: string[] }
-
-function parseMarkdown(text: string): Block[] {
-  const blocks: Block[] = []
-  const rawLines = text.split('\n')
-  let i = 0
-
-  while (i < rawLines.length) {
-    const line = rawLines[i] ?? ''
-
-    // Fenced code block
-    if (line.startsWith('```')) {
-      const codeLines: string[] = []
-      i++
-      while (i < rawLines.length && !(rawLines[i] ?? '').startsWith('```')) {
-        codeLines.push(rawLines[i] ?? '')
-        i++
-      }
-      i++ // skip closing ```
-      blocks.push({ type: 'code_block', lines: codeLines })
-      continue
-    }
-
-    // Heading
-    const headingMatch = /^(#{1,3})\s+(.+)$/.exec(line)
-    if (headingMatch) {
-      blocks.push({
-        type: 'heading',
-        level: headingMatch[1]!.length,
-        html: renderInline(headingMatch[2] ?? ''),
-      })
-      i++
-      continue
-    }
-
-    // HR
-    if (/^---+$/.test(line.trim())) {
-      blocks.push({ type: 'hr' })
-      i++
-      continue
-    }
-
-    // List item
-    if (/^[-*]\s/.test(line) || /^\d+\.\s/.test(line)) {
-      const items: string[] = []
-      while (
-        i < rawLines.length &&
-        (/^[-*]\s/.test(rawLines[i] ?? '') || /^\d+\.\s/.test(rawLines[i] ?? ''))
-      ) {
-        const itemText = (rawLines[i] ?? '').replace(/^[-*]\s/, '').replace(/^\d+\.\s/, '')
-        items.push(renderInline(itemText))
-        i++
-      }
-      blocks.push({ type: 'list', items })
-      continue
-    }
-
-    // Empty line — skip
-    if (line.trim() === '') {
-      i++
-      continue
-    }
-
-    // Paragraph — accumulate consecutive non-special lines
-    const paraLines: string[] = []
-    while (
-      i < rawLines.length &&
-      (rawLines[i] ?? '').trim() !== '' &&
-      !/^#{1,3}\s/.test(rawLines[i] ?? '') &&
-      !(rawLines[i] ?? '').startsWith('```') &&
-      !/^[-*]\s/.test(rawLines[i] ?? '') &&
-      !/^\d+\.\s/.test(rawLines[i] ?? '')
-    ) {
-      paraLines.push(renderInline(rawLines[i] ?? ''))
-      i++
-    }
-    if (paraLines.length > 0) {
-      blocks.push({ type: 'paragraph', html: paraLines.join('<br />') })
-    }
-  }
-
-  return blocks
-}
-
-function MarkdownContent({ content }: { content: string }) {
-  const blocks = parseMarkdown(content)
-  return (
-    <div className="space-y-2 leading-relaxed">
-      {blocks.map((block, idx) => {
-        if (block.type === 'heading') {
-          const levelCls =
-            block.level === 1
-              ? 'text-base font-bold'
-              : block.level === 2
-                ? 'text-sm font-bold'
-                : 'text-sm font-semibold'
-          if (block.level === 1) {
-            return (
-              <h1 key={idx} className={levelCls} dangerouslySetInnerHTML={{ __html: block.html }} />
-            )
-          }
-          if (block.level === 2) {
-            return (
-              <h2 key={idx} className={levelCls} dangerouslySetInnerHTML={{ __html: block.html }} />
-            )
-          }
-          return (
-            <h3 key={idx} className={levelCls} dangerouslySetInnerHTML={{ __html: block.html }} />
-          )
-        }
-
-        if (block.type === 'hr') {
-          return <hr key={idx} className="border-border" />
-        }
-
-        if (block.type === 'code_block') {
-          return (
-            <pre
-              key={idx}
-              className="overflow-x-auto rounded bg-muted/60 px-3 py-2 text-xs font-mono"
-            >
-              <code>{block.lines.join('\n')}</code>
-            </pre>
-          )
-        }
-
-        if (block.type === 'list') {
-          return (
-            <ul key={idx} className="list-disc space-y-0.5 pl-4">
-              {block.items.map((item, j) => (
-                <li key={j} dangerouslySetInnerHTML={{ __html: item }} />
-              ))}
-            </ul>
-          )
-        }
-
-        // paragraph
-        return <p key={idx} dangerouslySetInnerHTML={{ __html: block.html }} />
-      })}
-    </div>
-  )
-}
-
 export function ChatMessage({ role, content, citedChunkIds }: ChatMessageProps) {
   const isUser = role === 'user'
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
+
+  const copyCode = useCallback(async (text: string) => {
+    await navigator.clipboard.writeText(text)
+    setCopiedCode(text)
+    setTimeout(() => setCopiedCode(null), 2000)
+  }, [])
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[80%] rounded-xl px-4 py-3 text-sm ${
-          isUser ? 'bg-foreground text-background' : 'bg-muted text-foreground'
+        className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${
+          isUser ? 'bg-foreground text-background' : 'bg-muted/50 text-foreground'
         }`}
       >
         {isUser ? (
           <p className="whitespace-pre-wrap leading-relaxed">{content}</p>
         ) : (
-          <MarkdownContent content={content} />
+          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-p:mb-2 prose-headings:mb-2 prose-headings:mt-4 prose-li:my-0.5">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeKatex, rehypeRaw]}
+              components={{
+                h1: ({ children }) => <h1 className="text-base font-bold mt-4 mb-2">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-sm font-bold mt-3 mb-2">{children}</h2>,
+                h3: ({ children }) => (
+                  <h3 className="text-sm font-semibold mt-2 mb-1">{children}</h3>
+                ),
+                strong: ({ children }) => (
+                  <strong className="font-semibold text-foreground">{children}</strong>
+                ),
+                blockquote: ({ children }) => (
+                  <blockquote className="border-l-2 border-primary/40 pl-3 my-2 text-muted-foreground italic">
+                    {children}
+                  </blockquote>
+                ),
+                a: ({ href, children }) => (
+                  <a
+                    href={href}
+                    className="text-primary underline underline-offset-2"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {children}
+                  </a>
+                ),
+                table: ({ children }) => (
+                  <div className="overflow-x-auto my-3 rounded-lg border border-border">
+                    <table className="w-full text-xs border-collapse">{children}</table>
+                  </div>
+                ),
+                thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
+                th: ({ children }) => (
+                  <th className="text-left py-2 px-3 font-bold text-xs uppercase tracking-wider">
+                    {children}
+                  </th>
+                ),
+                td: ({ children }) => (
+                  <td className="py-2 px-3 border-t border-border/50">{children}</td>
+                ),
+                code: ({ className, children }) => {
+                  const match = /language-(\w+)/.exec(className ?? '')
+                  const language = match ? match[1] : ''
+                  const codeString = String(children ?? '').replace(/\n$/, '')
+
+                  if (match && language) {
+                    return (
+                      <div className="relative group my-3 rounded-lg overflow-hidden border border-border">
+                        <div className="flex items-center justify-between bg-zinc-900 border-b border-white/10 px-3 py-1">
+                          <span className="text-[10px] text-zinc-400 uppercase tracking-wide">
+                            {language}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void copyCode(codeString)}
+                            className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/10 text-zinc-400"
+                          >
+                            {copiedCode === codeString ? (
+                              <Check className="w-3 h-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
+                        <SyntaxHighlighter
+                          style={oneDark}
+                          language={language}
+                          PreTag="div"
+                          customStyle={{
+                            margin: 0,
+                            padding: '0.75rem',
+                            fontSize: '0.75rem',
+                            lineHeight: '1.5',
+                          }}
+                        >
+                          {codeString}
+                        </SyntaxHighlighter>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">
+                      {children}
+                    </code>
+                  )
+                },
+                pre: ({ children }) => <>{children}</>,
+                hr: () => <hr className="border-border my-4" />,
+                details: ({ children }) => (
+                  <details className="my-3 rounded-lg border border-border bg-muted/20 overflow-hidden [&>*:not(summary)]:px-4 [&>*:not(summary)]:py-2">
+                    {children}
+                  </details>
+                ),
+                summary: ({ children }) => (
+                  <summary className="cursor-pointer px-4 py-2.5 font-medium text-sm bg-muted/40 hover:bg-muted/60 transition-colors select-none">
+                    {children}
+                  </summary>
+                ),
+              }}
+            >
+              {preprocessContent(content)}
+            </ReactMarkdown>
+          </div>
         )}
         {!isUser && citedChunkIds && citedChunkIds.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">

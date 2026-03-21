@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { trpc } from '@/lib/trpc/client'
-import { ChatMessage } from './ChatMessage'
+import { ChatMessage as LegacyChatMessage } from './ChatMessage'
+import { ChatMessage as LessonChatMessage } from '../lesson/chat/ChatMessage'
 import { ChatInput } from './ChatInput'
 import { Sparkles } from 'lucide-react'
 
@@ -24,11 +25,17 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
   const bottomRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState('')
 
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: '/api/chat',
+        body: { sessionId },
+      }),
+    [sessionId],
+  )
+
   const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({
-      api: '/api/chat',
-      body: { sessionId },
-    }),
+    transport,
     messages: initialMessages.map((m) => ({
       id: m.id,
       role: m.role === 'system' ? ('system' as const) : m.role,
@@ -49,42 +56,76 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
   // Find citations from persisted messages (streaming messages don't have them)
   const citationsMap = new Map(initialMessages.map((m) => [m.id, m.cited_chunk_ids ?? []]))
 
-  // Extract text content from message parts
+  const TOOL_MARKER_RE = /\s*<!--TOOL_SECTIONS:[\s\S]*?-->/g
+
+  // Extract text content from message parts (strip tool section markers)
   const getMessageText = (m: (typeof messages)[number]): string => {
-    return (
+    const raw =
       m.parts
         ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
         .map((p) => p.text)
         .join('') ?? ''
-    )
+    return raw.replace(TOOL_MARKER_RE, '').trim()
+  }
+
+  // Extract persisted tool sections from message content (for reloaded sessions)
+  const getPersistedSections = (m: (typeof messages)[number]): Record<string, unknown>[] | null => {
+    const raw =
+      m.parts
+        ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map((p) => p.text)
+        .join('') ?? ''
+    const match = /<!--TOOL_SECTIONS:([\s\S]*?)-->/.exec(raw)
+    if (!match?.[1]) return null
+    try {
+      const toolData = JSON.parse(match[1]) as { sections: Record<string, unknown>[] }[]
+      return toolData.flatMap((t) => t.sections ?? [])
+    } catch {
+      return null
+    }
   }
 
   return (
-    <div className="flex flex-col h-full max-w-4xl mx-auto w-full relative z-10">
+    <div className="flex flex-col h-full w-full relative z-10">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-8 space-y-8 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto px-6 md:px-12 lg:px-20 py-8 space-y-8 custom-scrollbar">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary mb-6 shadow-inner border border-primary/20">
-              <Sparkles className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl font-bold mb-2">How can I help you learn?</h2>
-            <p className="text-muted-foreground max-w-md">
-              I have full context of your workspace documents. Ask me to explain concepts, summarize
-              readings, or generate practice questions.
-            </p>
-          </div>
+          <EmptyState
+            workspaceId={workspaceId}
+            onSelect={(q) => {
+              sendMessage({ text: q })
+            }}
+          />
         )}
 
         {messages.map((m) => {
-          const citations = citationsMap.get(m.id)
+          // Use the lesson chat's ChatMessage component — it handles
+          // text parts, tool-renderSections parts, streaming states,
+          // and error fallbacks (rawInput) all in one place.
+          const parts = (m.parts ?? []) as {
+            type: string
+            text?: string
+            toolName?: string
+            input?: Record<string, unknown>
+            rawInput?: Record<string, unknown>
+            state?: string
+          }[]
+
+          // For user messages, use the legacy styled bubble
+          if (m.role === 'user') {
+            const text = getMessageText(m)
+            if (!text) return null
+            return <LegacyChatMessage key={m.id} role="user" content={text} />
+          }
+
+          // For assistant messages, use the lesson chat renderer
+          // which handles text + tool calls in a single pass
           return (
-            <ChatMessage
-              key={m.id}
-              role={m.role === 'user' ? 'user' : 'assistant'}
-              content={getMessageText(m)}
-              {...(citations && citations.length > 0 ? { citedChunkIds: citations } : {})}
-            />
+            <div key={m.id} className="flex justify-start">
+              <div className="max-w-[85%]">
+                <LessonChatMessage role="assistant" parts={parts} />
+              </div>
+            </div>
           )
         })}
 
@@ -115,7 +156,7 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
       </div>
 
       {/* Input */}
-      <div className="p-4 md:p-6 bg-gradient-to-t from-background via-background to-transparent">
+      <div className="px-6 md:px-12 lg:px-20 py-4 bg-gradient-to-t from-background via-background to-transparent">
         <ChatInput
           value={input}
           onChange={(v) => setInput(v)}
@@ -131,6 +172,57 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
             AI Coach can make mistakes. Verify important information.
           </span>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({
+  workspaceId,
+  onSelect,
+}: {
+  workspaceId: string
+  onSelect: (q: string) => void
+}) {
+  const { data: concepts } = trpc.concept.list.useQuery({ workspaceId })
+  const topConcepts = (concepts ?? []).slice(0, 3)
+
+  const starters =
+    topConcepts.length > 0
+      ? [
+          `Explain "${topConcepts[0]?.name}" in simple terms`,
+          ...(topConcepts[1]
+            ? [`How does "${topConcepts[0]?.name}" relate to "${topConcepts[1]?.name}"?`]
+            : []),
+          ...(topConcepts[2] ? [`Give me practice questions about "${topConcepts[2]?.name}"`] : []),
+        ]
+      : [
+          'Summarize the key ideas from my documents',
+          'What are the most important concepts I should focus on?',
+          'Generate practice questions from this material',
+        ]
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full text-center px-6">
+      <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-8 shadow-inner border border-primary/20">
+        <Sparkles className="w-10 h-10" />
+      </div>
+      <h2 className="text-3xl font-black tracking-tight mb-3">How can I help you learn?</h2>
+      <p className="text-muted-foreground max-w-lg mb-10 text-base">
+        I have full context of your workspace documents. Ask me to explain concepts, summarize
+        readings, or generate practice questions.
+      </p>
+      <div className="flex flex-col gap-3 w-full max-w-lg">
+        {starters.map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() => onSelect(q)}
+            className="text-left rounded-xl border border-border/50 bg-card/40 px-5 py-4 text-sm text-muted-foreground hover:text-foreground hover:bg-card/80 hover:border-primary/30 transition-all"
+          >
+            {q}
+          </button>
+        ))}
       </div>
     </div>
   )

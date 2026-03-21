@@ -1,8 +1,25 @@
 # Tasks
 
+## Task: UI Revamp Audit
+
+**Goal:** Implement the dashboard and workspaces revamp plan so the product shell, cards, and actions feel intentional across dark and light themes.
+
+### Plan
+
+- [x] Extract shared shell, density, and card patterns from the approved Paper direction.
+- [x] Stabilize the shared surface system in `globals.css` and `@learn-x/ui`.
+- [x] Revamp the workspaces index with a stronger hero, working search/filter controls, and a modal-backed create action.
+- [x] Redesign workspace cards to surface real study-state signals and explicit next actions.
+- [x] Wire dashboard CTAs to real destinations and bring KPI/right-rail modules into the shared surface language.
+- [x] Verify the affected slices with typecheck plus targeted lint on edited files.
+
+### Summary
+
+UI revamp slice complete. Shared light/dark surface primitives now back the app shell and stat cards, workspace cards use real document/concept/lesson counts instead of placeholder mastery UI, the workspaces index has functional filtering plus a working create tile, and dashboard actions now route to real study flows. Repo typecheck passes; full repo lint is still blocked by a pre-existing `FlashcardReview.tsx` issue outside this slice, while all edited files lint clean.
+
 ## Task: Phase 0 — Foundations
 
-**Goal:** Scaffold the full monorepo so `pnpm dev` starts the web app, `user.getProfile` tRPC call returns data from Supabase, Trigger.dev health task runs, and Helicone logs a test request.
+**Goal:** Scaffold the full monorepo so `pnpm dev` starts the web app, `user.getProfile` tRPC call returns data from Supabase, and Trigger.dev health task runs.
 **Phase:** 0
 
 ### Summary

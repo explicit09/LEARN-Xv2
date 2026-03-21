@@ -43,10 +43,13 @@ export const flashcardRouter = createTRPCRouter({
       await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
 
       try {
-        const { tasks } = await import('@trigger.dev/sdk/v3')
-        await tasks.trigger('generate-flashcards', { workspaceId: input.workspaceId })
-      } catch {
-        // Trigger.dev not available in all environments — best effort
+        const { generateFlashcards } =
+          await import('@/../../../trigger/src/jobs/generate-flashcards')
+        console.log('[flashcard.generate] Triggering job for workspace:', input.workspaceId)
+        const handle = await generateFlashcards.trigger({ workspaceId: input.workspaceId })
+        console.log('[flashcard.generate] Trigger handle:', handle)
+      } catch (err) {
+        console.error('[flashcard.generate] Trigger failed:', err)
       }
 
       return { started: true }
@@ -171,6 +174,41 @@ export const flashcardRouter = createTRPCRouter({
 
     if (error || !review)
       throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message })
+
+    // Upsert mastery record if card has a concept
+    const { data: cardFull } = await ctx.supabase
+      .from('flashcards')
+      .select('concept_id')
+      .eq('id', input.cardId)
+      .single()
+
+    if (cardFull?.concept_id) {
+      // Mastery from FSRS: stability-based (higher stability = higher mastery)
+      const masteryLevel = Math.min(nextCard.stability / 30, 1.0)
+      await ctx.supabase.from('mastery_records').upsert(
+        {
+          user_id: userId,
+          concept_id: cardFull.concept_id,
+          workspace_id: set.workspace_id,
+          mastery_level: masteryLevel,
+          source: 'flashcard',
+        },
+        { onConflict: 'user_id,concept_id', ignoreDuplicates: false },
+      )
+    }
+
+    // Log FLASHCARD_REVIEWED event
+    await ctx.supabase.from('ai_requests').insert({
+      workspace_id: set.workspace_id,
+      user_id: userId,
+      model: 'n/a',
+      provider: 'system',
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      cost_usd: 0,
+      latency_ms: 0,
+      task_name: 'FLASHCARD_REVIEWED',
+    })
 
     return {
       ...review,

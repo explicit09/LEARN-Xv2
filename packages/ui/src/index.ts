@@ -13,3 +13,4 @@ export {
 } from './primitives/dialog'
 export { Input } from './primitives/input'
 export { Separator } from './primitives/separator'
+export * from './primitives/stat-card'

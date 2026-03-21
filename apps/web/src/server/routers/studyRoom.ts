@@ -123,6 +123,17 @@ export const studyRoomRouter = createTRPCRouter({
       throw new TRPCError({ code: 'FORBIDDEN', message: 'Room is closed' })
     }
 
+    const { data: enrollment } = await ctx.supabase
+      .from('course_enrollments')
+      .select('status')
+      .eq('course_id', room.course_id)
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (!enrollment || enrollment.status !== 'active') {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'You are not enrolled in this course' })
+    }
+
     const { error } = await ctx.supabase
       .from('study_room_members')
       .upsert({ room_id: input.roomId, user_id: userId }, { onConflict: 'room_id,user_id' })
@@ -211,7 +222,18 @@ export const studyRoomRouter = createTRPCRouter({
       z.object({ roomId: z.string().uuid(), limit: z.number().int().min(1).max(100).optional() }),
     )
     .query(async ({ ctx, input }) => {
-      await resolveUserId(ctx.supabase, ctx.user.id)
+      const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+
+      const { data: membership } = await ctx.supabase
+        .from('study_room_members')
+        .select('room_id')
+        .eq('room_id', input.roomId)
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (!membership) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'You are not in this room' })
+      }
 
       const { data: messages } = await ctx.supabase
         .from('study_room_messages')
@@ -234,7 +256,18 @@ export const studyRoomRouter = createTRPCRouter({
   get: protectedProcedure
     .input(z.object({ roomId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      await resolveUserId(ctx.supabase, ctx.user.id)
+      const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+
+      const { data: membership } = await ctx.supabase
+        .from('study_room_members')
+        .select('room_id')
+        .eq('room_id', input.roomId)
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (!membership) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'You are not in this room' })
+      }
 
       const { data: room } = await ctx.supabase
         .from('study_rooms')

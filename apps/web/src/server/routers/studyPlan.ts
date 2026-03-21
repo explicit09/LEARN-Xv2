@@ -14,6 +14,22 @@ async function resolveUserId(supabase: SupabaseClient, authId: string): Promise<
   return user.id as string
 }
 
+async function resolveWorkspace(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  userId: string,
+): Promise<string> {
+  const { data: workspace, error } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('id', workspaceId)
+    .eq('user_id', userId)
+    .single()
+  if (error || !workspace)
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace not found' })
+  return workspace.id as string
+}
+
 export interface PlanItem {
   type: string
   resourceId: string
@@ -35,29 +51,46 @@ async function buildStudyPlanItems(
   const items: PlanItem[] = []
 
   // 1. Due flashcards
-  const flashcardQuery = supabase
-    .from('flashcards')
-    .select('id, set_id, front')
-    .lt('due_at', new Date().toISOString())
-    .eq('user_id', userId)
-    .limit(3)
+  let workspaceIds: string[] = []
+  if (workspaceId) {
+    workspaceIds = [workspaceId]
+  } else {
+    const { data: workspaces } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('user_id', userId)
+      .limit(25)
+    workspaceIds = (workspaces ?? []).map((w) => w.id as string)
+  }
 
-  const { data: dueCards } = await flashcardQuery
+  if (workspaceIds.length > 0) {
+    const { data: dueSets } = await supabase
+      .from('flashcard_sets')
+      .select(
+        `id, title, workspace_id,
+         flashcards!inner(id, due_at)`,
+      )
+      .in('workspace_id', workspaceIds)
+      .lte('flashcards.due_at', new Date().toISOString())
+      .limit(3)
 
-  if (dueCards?.length) {
-    items.push({
-      type: 'flashcard_review',
-      resourceId: dueCards[0]?.set_id ?? '',
-      resourceType: 'flashcard_set',
-      estimatedMinutes: Math.min(10, dueCards.length * 2),
-      completed: false,
-    })
+    if (dueSets?.length) {
+      items.push({
+        type: 'flashcard_review',
+        resourceId: dueSets[0]?.id ?? '',
+        resourceType: 'flashcard_set',
+        estimatedMinutes: Math.min(10, dueSets.length * 2),
+        completed: false,
+        workspaceId: dueSets[0]?.workspace_id as string,
+      })
+    }
   }
 
   // 2. Incomplete lessons (workspace scoped if given)
   let lessonsQuery = supabase
     .from('lessons')
     .select('id, title, workspace_id')
+    .eq('user_id', userId)
     .eq('is_completed', false)
     .limit(3)
 
@@ -109,6 +142,9 @@ export const studyPlanRouter = createTRPCRouter({
     .input(z.object({ workspaceId: z.string().uuid().optional() }))
     .query(async ({ ctx, input }) => {
       const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+      if (input.workspaceId) {
+        await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
+      }
       const today = new Date().toISOString().split('T')[0]
 
       // Look for existing plan
@@ -180,6 +216,9 @@ export const studyPlanRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+      if (input.workspaceId) {
+        await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
+      }
       const today = new Date().toISOString().split('T')[0]
 
       // Check if plan exists for today
@@ -228,7 +267,8 @@ export const studyPlanRouter = createTRPCRouter({
   getReadinessScore: protectedProcedure
     .input(z.object({ workspaceId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      await resolveUserId(ctx.supabase, ctx.user.id)
+      const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+      await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
       const score = await computeReadinessScore(ctx.supabase, input.workspaceId)
       return { readinessScore: score }
     }),

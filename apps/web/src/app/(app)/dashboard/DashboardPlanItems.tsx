@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import type { PlanItem } from '@/server/routers/studyPlan'
 import { BookOpen, AlertCircle, Brain, Calendar } from 'lucide-react'
 import { Button } from '@learn-x/ui'
@@ -5,9 +6,17 @@ import { CreateWorkspaceModal } from '@/components/workspace/CreateWorkspaceModa
 
 const ITEM_COLORS = ['bg-primary', 'bg-purple-500', 'bg-yellow-500', 'bg-emerald-500', 'bg-red-500']
 
+function getPlanHref(item: PlanItem): string | null {
+  if (!item.workspaceId) return '/dashboard'
+  if (item.type === 'flashcard_review') return `/workspace/${item.workspaceId}/flashcards`
+  if (item.type === 'lesson') return `/workspace/${item.workspaceId}/lesson/${item.resourceId}`
+  return `/workspace/${item.workspaceId}`
+}
+
 export function StudyPlanItem({ item }: { item: PlanItem }) {
   const isFlashcard = item.type === 'flashcard_review'
   const isLesson = item.type === 'lesson'
+  const href = getPlanHref(item)
 
   const label = isFlashcard ? 'Review' : isLesson ? 'Lesson' : 'Study'
   const title = isFlashcard
@@ -17,22 +26,22 @@ export function StudyPlanItem({ item }: { item: PlanItem }) {
       : 'Study session'
 
   const accentClass = isFlashcard
-    ? 'bg-red-500/5 border-red-500/10 hover:border-red-500/30'
-    : 'bg-card border-border hover:border-primary/30'
+    ? 'surface-panel-subtle border-red-500/20 hover:border-red-500/30'
+    : 'surface-panel-subtle hover:border-primary/30'
   const labelClass = isFlashcard ? 'bg-red-500 text-white' : 'bg-primary text-primary-foreground'
   const barClass = isFlashcard ? 'bg-red-500' : 'bg-primary'
   const Icon = isLesson ? BookOpen : isFlashcard ? AlertCircle : Brain
 
-  return (
+  const content = (
     <div
-      className={`group flex items-center justify-between p-4 rounded-2xl ${accentClass} transition-colors cursor-pointer relative overflow-hidden`}
+      className={`surface-card-hover group flex items-center justify-between rounded-[22px] p-4 ${accentClass} relative overflow-hidden transition-colors`}
     >
       {isFlashcard && (
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${barClass} rounded-l-2xl`} />
       )}
       <div className="flex items-center gap-4 pl-2">
         <div
-          className={`w-6 h-6 rounded-full border ${isFlashcard ? 'border-red-500/30' : 'border-border'} flex items-center justify-center`}
+          className={`flex h-6 w-6 items-center justify-center rounded-full border ${isFlashcard ? 'border-red-500/30' : 'border-border'}`}
         />
         <div
           className={`w-8 h-8 rounded-lg ${isFlashcard ? 'bg-red-500/10 text-red-500' : 'bg-primary/10 text-primary'} flex items-center justify-center`}
@@ -46,11 +55,11 @@ export function StudyPlanItem({ item }: { item: PlanItem }) {
             >
               {label}
             </span>
-            <h3 className="font-semibold text-[15px]">{title}</h3>
+            <h3 className="text-[15px] font-semibold text-foreground">{title}</h3>
             <span className="text-xs text-muted-foreground">~{item.estimatedMinutes} min</span>
           </div>
           <p
-            className={`text-sm mt-0.5 ${isFlashcard ? 'text-red-400 font-medium' : 'text-muted-foreground'}`}
+            className={`mt-0.5 text-sm ${isFlashcard ? 'font-medium text-red-600 dark:text-red-300' : 'text-muted-foreground'}`}
           >
             {isFlashcard ? 'Cards ready for review' : 'Pick up where you left off'}
           </p>
@@ -58,14 +67,19 @@ export function StudyPlanItem({ item }: { item: PlanItem }) {
       </div>
       {isFlashcard && (
         <Button
+          asChild={Boolean(href)}
           variant="outline"
           className="bg-white text-black hover:bg-white/90 rounded-lg h-9 px-5 border-0 font-semibold shadow-lg"
         >
-          Start Now
+          {href ? <Link href={href}>Start Now</Link> : 'Start Now'}
         </Button>
       )}
     </div>
   )
+
+  if (!href) return content
+
+  return <Link href={href}>{content}</Link>
 }
 
 export function DueTodayItem({ item, index }: { item: PlanItem; index: number }) {
@@ -73,18 +87,23 @@ export function DueTodayItem({ item, index }: { item: PlanItem; index: number })
   const label = item.type === 'flashcard_review' ? 'Flashcard Review' : 'Lesson'
   const subLabel = item.workspaceId ? 'Workspace study' : 'Due today'
 
-  return (
-    <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border hover:bg-muted/50 cursor-pointer transition-colors">
+  const href = getPlanHref(item)
+  const content = (
+    <div className="surface-panel-subtle surface-card-hover flex cursor-pointer items-center justify-between rounded-xl p-3 transition-colors">
       <div className="flex items-center gap-3">
         <div className={`w-2 h-2 rounded-full ${color}`} />
         <div>
-          <h4 className="font-semibold text-sm">{label}</h4>
+          <h4 className="text-sm font-semibold text-foreground">{label}</h4>
           <p className="text-xs text-muted-foreground">{subLabel}</p>
         </div>
       </div>
-      <span className="text-xs font-bold text-foreground/60">~{item.estimatedMinutes} min</span>
+      <span className="text-xs font-bold text-muted-foreground">~{item.estimatedMinutes} min</span>
     </div>
   )
+
+  if (!href) return content
+
+  return <Link href={href}>{content}</Link>
 }
 
 export function LearningEngineEmpty({ hasWorkspaces }: { hasWorkspaces: boolean }) {

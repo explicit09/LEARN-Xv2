@@ -14,6 +14,8 @@ import { Button } from '@learn-x/ui'
 interface LessonChatProps {
   lessonId: string
   workspaceId: string
+  selectedText?: string | null
+  onClearSelection?: () => void
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -22,7 +24,12 @@ const SUGGESTED_QUESTIONS = [
   'How does this connect to prior concepts?',
 ]
 
-export function LessonChat({ lessonId, workspaceId }: LessonChatProps) {
+export function LessonChat({
+  lessonId,
+  workspaceId,
+  selectedText,
+  onClearSelection,
+}: LessonChatProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [sessionCreated, setSessionCreated] = useState(false)
@@ -56,6 +63,16 @@ export function LessonChat({ lessonId, workspaceId }: LessonChatProps) {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 150)
   }, [isOpen])
 
+  // Auto-open chat with selected text context
+  const [prevSelectedText, setPrevSelectedText] = useState('')
+  if (selectedText && selectedText !== prevSelectedText) {
+    setPrevSelectedText(selectedText)
+    if (!isOpen) {
+      setIsOpen(true)
+    }
+    setChatInput(`Explain this: "${selectedText}"`)
+  }
+
   async function handleSend(text?: string) {
     const content = text ?? chatInput
     if (!content.trim() || isStreaming) return
@@ -64,6 +81,7 @@ export function LessonChat({ lessonId, workspaceId }: LessonChatProps) {
     }
     sendMessage({ text: content })
     setChatInput('')
+    onClearSelection?.()
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -308,8 +326,13 @@ function AssistantPart({
     part.type === 'tool-renderSections' ||
     (part.type === 'dynamic-tool' && part.toolName === 'renderSections')
 
-  if (isRenderSections && part.input) {
-    const rawSections = (part.input as { sections?: Record<string, unknown>[] }).sections
+  // Handle tool calls — check both input and rawInput (rawInput available on error)
+  const toolInput =
+    part.input ??
+    ((part as Record<string, unknown>).rawInput as Record<string, unknown> | undefined)
+
+  if (isRenderSections && toolInput) {
+    const rawSections = (toolInput as { sections?: Record<string, unknown>[] }).sections
     if (!rawSections?.length) {
       if (part.state === 'input-streaming') {
         return (
@@ -336,6 +359,9 @@ function AssistantPart({
       </div>
     )
   }
+
+  // Skip step-start parts silently
+  if (part.type === 'step-start') return null
 
   return null
 }

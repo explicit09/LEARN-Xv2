@@ -153,6 +153,7 @@ function ExamRunner({ workspaceId, examId }: { workspaceId: string; examId: stri
   }
 
   async function handleCompleteExam(attemptId: string, questions: Question[]) {
+    if (submitResponseMutation.isPending || completeMutation.isPending) return
     setState({ phase: 'submitting' })
     // Submit any unsaved answers
     const savePromises = questions
@@ -277,6 +278,7 @@ function ExamRunner({ workspaceId, examId }: { workspaceId: string; examId: stri
         {currentIndex < total - 1 ? (
           <button
             onClick={() => {
+              if (submitResponseMutation.isPending) return
               // Auto-save response on next
               if (currentAnswer) {
                 submitResponseMutation.mutate({
@@ -287,6 +289,7 @@ function ExamRunner({ workspaceId, examId }: { workspaceId: string; examId: stri
               }
               setCurrentIndex((i) => i + 1)
             }}
+            disabled={submitResponseMutation.isPending}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-opacity"
             aria-label="Next question"
           >
@@ -295,7 +298,7 @@ function ExamRunner({ workspaceId, examId }: { workspaceId: string; examId: stri
         ) : (
           <button
             onClick={() => handleCompleteExam(attemptId, questions)}
-            disabled={completeMutation.isPending}
+            disabled={submitResponseMutation.isPending || completeMutation.isPending}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-opacity"
             aria-label="Submit exam"
           >

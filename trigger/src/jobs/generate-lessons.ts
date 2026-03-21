@@ -1,12 +1,19 @@
 import { task, logger } from '@trigger.dev/sdk/v3'
 import { createClient } from '@supabase/supabase-js'
-import { generateText, Output } from 'ai'
-import { z } from 'zod'
 
-import { anthropic, MODEL_ROUTES } from '../lib/ai'
-import { orderConceptsByPrerequisites } from '../lib/concept-ordering'
-import { PROMPT_VERSION, buildLessonPrompt } from '../lib/prompts/lesson-generation.v1'
+import { MODEL_ROUTES, calculateCost } from '../lib/ai'
+import { PROMPT_VERSION, buildLessonPrompt } from '../lib/prompts/lesson-generation.v3'
 import { getDomainConfig } from '../lib/prompts/domains'
+import {
+  embedTexts,
+  generateLessonWithRetry,
+  buildConceptQuery,
+  buildSourceMapping,
+  BATCH_SIZE,
+  EMBEDDING_DIMENSIONS,
+  type RawChunk,
+  type TopicWithContext,
+} from '../lib/lesson-generation-helpers'
 import { selectInterestsForLesson, primaryAnalogyDomain } from '../lib/interest-rotation'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -23,88 +30,6 @@ interface GenerateLessonsPayload {
   userId: string
 }
 
-// Flat section schema — LLM fills relevant fields per type, uses "" / [] for unused.
-const lessonSectionZ = z.object({
-  type: z.string(), // text|concept_definition|process_flow|comparison_table|analogy_card|key_takeaway|mini_quiz|quote_block|timeline|concept_bridge|code_explainer|interactive_widget
-  content: z.string(),
-  term: z.string(),
-  definition: z.string(),
-  analogy: z.string(),
-  title: z.string(),
-  question: z.string(),
-  explanation: z.string(),
-  concept: z.string(),
-  from_concept: z.string(),
-  to_concept: z.string(),
-  relation: z.string(),
-  language: z.string(),
-  code: z.string(),
-  quote: z.string(),
-  attribution: z.string(),
-  description: z.string(),
-  html: z.string(),
-  points: z.array(z.string()),
-  columns: z.array(z.string()),
-  steps: z.array(z.object({ label: z.string(), description: z.string() })),
-  rows: z.array(z.object({ label: z.string(), values: z.array(z.string()) })),
-  mapping: z.array(z.object({ abstract: z.string(), familiar: z.string() })),
-  options: z.array(z.object({ label: z.string(), text: z.string(), is_correct: z.boolean() })),
-  annotations: z.array(z.object({ line: z.number(), note: z.string() })),
-  events: z.array(z.object({ date: z.string(), label: z.string(), description: z.string() })),
-})
-
-const lessonOutputSchema = z.object({
-  title: z.string(),
-  summary: z.string(),
-  key_takeaways: z.array(z.string()),
-  sections: z.array(lessonSectionZ),
-})
-const EMBEDDING_DIMENSIONS = 3072
-
-async function embedTexts(texts: string[]): Promise<number[][]> {
-  const key = process.env.OPENAI_API_KEY
-  if (!key || texts.length === 0) return texts.map(() => [])
-  const res = await fetch('https://api.openai.com/v1/embeddings', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'text-embedding-3-large',
-      input: texts,
-      dimensions: EMBEDDING_DIMENSIONS,
-    }),
-  })
-  if (!res.ok) {
-    logger.warn('Embedding failed', { status: res.status })
-    return texts.map(() => [])
-  }
-  const json = (await res.json()) as { data: { embedding: number[]; index: number }[] }
-  return json.data.sort((a, b) => a.index - b.index).map((d) => d.embedding)
-}
-
-interface GenerateResult {
-  object: z.infer<typeof lessonOutputSchema>
-  inputTokens: number
-  outputTokens: number
-}
-async function generateLessonWithRetry(model: string, prompt: string): Promise<GenerateResult> {
-  let lastErr: unknown
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const { output: object, usage } = await generateText({
-        model: anthropic(model),
-        output: Output.object({ schema: lessonOutputSchema }),
-        prompt,
-      })
-      return { object, inputTokens: usage.inputTokens ?? 0, outputTokens: usage.outputTokens ?? 0 }
-    } catch (err) {
-      lastErr = err
-      logger.warn(`generateObject attempt ${attempt + 1} failed`, { err: String(err) })
-    }
-  }
-  throw lastErr
-}
-const BATCH_SIZE = 7
-
 export const generateLessons = task({
   id: 'generate-lessons',
   maxDuration: 900,
@@ -116,7 +41,7 @@ export const generateLessons = task({
 
     logger.info('generate-lessons started', { workspaceId, userId })
 
-    // 0. Fetch workspace domain settings
+    // ── 0. Fetch workspace domain settings ──────────────────
     const { data: wsData } = await supabase
       .from('workspaces')
       .select('settings')
@@ -124,81 +49,151 @@ export const generateLessons = task({
       .single()
     const wsSettings = (wsData?.settings as Record<string, unknown>) ?? {}
     const domainConfig = getDomainConfig(wsSettings.primaryDomain as string | undefined)
-    logger.info('Domain config', {
-      domain: wsSettings.primaryDomain,
-      framework: domainConfig.framework,
-    })
 
-    // 1. Fetch all concepts for workspace
-    const { data: concepts, error: conceptsError } = await supabase
+    // ── 0b. Build document title lookup for citations ───────
+    const { data: allDocs } = await supabase
+      .from('documents')
+      .select('id, title')
+      .eq('workspace_id', workspaceId)
+    const docTitleMap = new Map((allDocs ?? []).map((d) => [d.id as string, d.title as string]))
+
+    // ── 1. Fetch active syllabus ────────────────────────────
+    const { data: syllabus } = await supabase
+      .from('syllabuses')
+      .select('id')
+      .eq('workspace_id', workspaceId)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle()
+
+    if (!syllabus) {
+      logger.info('No active syllabus found', { workspaceId })
+      return { lessons: 0, reason: 'no_syllabus' }
+    }
+
+    // ── 2. Fetch units + topics (ordered) ───────────────────
+    const { data: units } = await supabase
+      .from('syllabus_units')
+      .select('id, title, order_index')
+      .eq('syllabus_id', syllabus.id)
+      .order('order_index', { ascending: true })
+
+    if (!units || units.length === 0) {
+      logger.info('No units in syllabus', { workspaceId })
+      return { lessons: 0, reason: 'no_units' }
+    }
+
+    const { data: allTopics } = await supabase
+      .from('syllabus_topics')
+      .select('id, unit_id, title, description, order_index, learning_objectives, continuity_notes')
+      .eq('syllabus_id', syllabus.id)
+      .order('order_index', { ascending: true })
+
+    if (!allTopics || allTopics.length === 0) {
+      logger.info('No topics in syllabus', { workspaceId })
+      return { lessons: 0, reason: 'no_topics' }
+    }
+
+    // ── 3. Fetch topic→concept mappings ─────────────────────
+    const topicIds = allTopics.map((t) => t.id as string)
+    const { data: topicConceptLinks } = await supabase
+      .from('syllabus_topic_concepts')
+      .select('topic_id, concept_id')
+      .in('topic_id', topicIds)
+
+    const { data: allConcepts } = await supabase
       .from('concepts')
       .select('id, name, description')
       .eq('workspace_id', workspaceId)
 
-    if (conceptsError) throw conceptsError
-    if (!concepts || concepts.length === 0) {
-      logger.info('No concepts found', { workspaceId })
-      return { lessons: 0, reason: 'no_concepts' }
+    const conceptMap = new Map(
+      (allConcepts ?? []).map((c) => [
+        c.id as string,
+        {
+          name: c.name as string,
+          description: (c.description as string) ?? '',
+        },
+      ]),
+    )
+
+    // Build topic→concepts mapping
+    const topicConceptMap = new Map<string, string[]>()
+    for (const link of topicConceptLinks ?? []) {
+      const tid = link.topic_id as string
+      const cid = link.concept_id as string
+      const arr = topicConceptMap.get(tid) ?? []
+      arr.push(cid)
+      topicConceptMap.set(tid, arr)
     }
 
-    // 1b. Skip concepts that already have lessons (prevent duplicates on re-run)
-    const { data: existingLC } = await supabase
-      .from('lesson_concepts')
-      .select('concept_id')
-      .in(
-        'concept_id',
-        concepts.map((c) => c.id),
-      )
-    const coveredConceptIds = new Set((existingLC ?? []).map((lc) => lc.concept_id as string))
-    const newConcepts = concepts.filter((c) => !coveredConceptIds.has(c.id))
-    if (newConcepts.length === 0) {
-      logger.info('All concepts already have lessons', { workspaceId, total: concepts.length })
+    // ── 4. Build ordered topic list with context ────────────
+    const unitMap = new Map(units.map((u) => [u.id as string, u.title as string]))
+
+    // Sort topics by unit order_index, then topic order_index
+    const unitOrderMap = new Map(units.map((u) => [u.id as string, u.order_index as number]))
+    const sortedTopics = [...allTopics].sort((a, b) => {
+      const uA = unitOrderMap.get(a.unit_id as string) ?? 0
+      const uB = unitOrderMap.get(b.unit_id as string) ?? 0
+      if (uA !== uB) return uA - uB
+      return (a.order_index as number) - (b.order_index as number)
+    })
+
+    const topicsWithContext: TopicWithContext[] = sortedTopics.map((t, globalIdx) => {
+      const cIds = topicConceptMap.get(t.id as string) ?? []
+      return {
+        topicId: t.id as string,
+        topicTitle: t.title as string,
+        unitTitle: unitMap.get(t.unit_id as string) ?? '',
+        orderIndex: t.order_index as number,
+        globalIndex: globalIdx,
+        description: (t.description as string) ?? null,
+        learningObjectives: (t.learning_objectives as string[]) ?? [],
+        continuityNotes: (t.continuity_notes as string) ?? null,
+        conceptIds: cIds,
+        conceptNames: cIds.map((id) => conceptMap.get(id)?.name ?? ''),
+        conceptDescriptions: cIds.map((id) => conceptMap.get(id)?.description ?? ''),
+      }
+    })
+
+    const totalTopics = topicsWithContext.length
+
+    // ── 5. Skip topics that already have lessons ────────────
+    const { data: existingLessons } = await supabase
+      .from('lessons')
+      .select('syllabus_topic_id')
+      .eq('workspace_id', workspaceId)
+      .not('syllabus_topic_id', 'is', null)
+
+    const coveredTopicIds = new Set(
+      (existingLessons ?? []).map((l) => l.syllabus_topic_id as string),
+    )
+    const newTopics = topicsWithContext.filter((t) => !coveredTopicIds.has(t.topicId))
+
+    if (newTopics.length === 0) {
+      logger.info('All topics already have lessons', { workspaceId, total: totalTopics })
       return { lessons: 0, reason: 'all_covered' }
     }
 
-    // 1c. Prevent concurrent duplicate runs — check for recent in-flight lesson generation
+    // Prevent concurrent duplicate runs
     const { count: recentLessonCount } = await supabase
       .from('lessons')
       .select('id', { count: 'exact', head: true })
       .eq('workspace_id', workspaceId)
       .gte('created_at', new Date(Date.now() - 60_000).toISOString())
     if ((recentLessonCount ?? 0) > 0) {
-      logger.info('Recent lessons detected, skipping to avoid race', { recentLessonCount })
+      logger.info('Skipping — recent lessons detected', { recentLessonCount })
       return { lessons: 0, reason: 'concurrent_run' }
     }
 
-    logger.info('Concepts to generate', {
-      total: concepts.length,
-      alreadyCovered: coveredConceptIds.size,
-      toGenerate: newConcepts.length,
-    })
+    logger.info('Topics to generate', { total: totalTopics, toGenerate: newTopics.length })
 
-    // 2. Order concepts by prerequisites
-    const { data: relations } = await supabase
-      .from('concept_relations')
-      .select('source_concept_id, target_concept_id, relation_type')
-      .in(
-        'source_concept_id',
-        newConcepts.map((c) => c.id),
-      )
-
-    const orderedConcepts = orderConceptsByPrerequisites(
-      newConcepts,
-      (relations ?? []).map((r) => ({
-        sourceConceptId: r.source_concept_id as string,
-        targetConceptId: r.target_concept_id as string,
-        relationType: r.relation_type as string,
-      })),
+    // Batch-embed all topic queries
+    const topicQueries = newTopics.map((t) =>
+      [t.topicTitle, ...t.conceptDescriptions.filter(Boolean)].join(': '),
     )
+    const embeddings = await embedTexts(topicQueries)
 
-    // 3. Batch-embed all concept queries upfront
-    const conceptQueries = orderedConcepts.map((c) =>
-      c.description ? `${c.name}: ${c.description}` : String(c.name),
-    )
-    logger.info('Embedding concept queries', { count: conceptQueries.length })
-    const embeddings = await embedTexts(conceptQueries)
-
-    // 4. Fetch user persona (all fields needed for personalization)
+    // Fetch user persona
     const { data: persona } = await supabase
       .from('personas')
       .select(
@@ -229,69 +224,88 @@ export const generateLessons = task({
       } as Parameters<typeof buildLessonPrompt>[0]['persona']
     }
 
-    // 5. Fetch syllabus topic map
-    const { data: syllabusTopics } = await supabase
-      .from('syllabus_topics')
-      .select('id, title, syllabus_id, unit_id')
-      .in(
-        'syllabus_id',
-        (
-          await supabase
-            .from('syllabuses')
-            .select('id')
-            .eq('workspace_id', workspaceId)
-            .eq('status', 'active')
-            .limit(1)
-        ).data?.map((s) => s.id) ?? [],
-      )
+    // Fetch existing lesson takeaways for spaced retrieval
+    const { data: existingLessonTakeaways } = await supabase
+      .from('lessons')
+      .select('syllabus_topic_id, key_takeaways')
+      .eq('workspace_id', workspaceId)
+      .not('key_takeaways', 'is', null)
 
-    const topicMap = new Map(syllabusTopics?.map((t) => [t.title.toLowerCase(), t.id]) ?? [])
+    const takeawaysByTopicId = new Map<string, string[]>()
+    for (const l of existingLessonTakeaways ?? []) {
+      if (l.syllabus_topic_id && l.key_takeaways) {
+        takeawaysByTopicId.set(l.syllabus_topic_id as string, l.key_takeaways as string[])
+      }
+    }
 
-    // 6. Generate lessons in parallel batches
+    // ── 9. Generate lessons per topic in batches ────────────
     const generatedLessons: string[] = []
 
-    async function processOneConcept(i: number) {
-      const concept = orderedConcepts[i]
-      if (!concept) return
+    async function processOneTopic(topicIdx: number) {
+      const topic = newTopics[topicIdx]
+      if (!topic) return
 
-      const prerequisites = orderedConcepts
-        .slice(0, i)
-        .filter((_prereq, idx) =>
-          (relations ?? []).some(
-            (r) =>
-              r.source_concept_id === orderedConcepts[idx]?.id &&
-              r.target_concept_id === concept.id &&
-              r.relation_type === 'prerequisite',
-          ),
-        )
-        .map((c) => c.name)
+      const embedding = embeddings[topicIdx]
 
-      // Retrieve relevant chunks via hybrid search
+      const queryText = buildConceptQuery(topic)
+
       let retrievedChunks: string[] = []
-      const embedding = embeddings[i]
+      let rawChunks: RawChunk[] = []
+      const matchCount = Math.min(8 + topic.conceptIds.length * 2, 12)
       try {
         const hasReal = embedding && embedding.length === EMBEDDING_DIMENSIONS
         const { data: chunks } = await supabase.rpc('hybrid_search', {
-          p_workspace_id: workspaceId,
-          p_query_embedding: hasReal
+          workspace_id_filter: workspaceId,
+          query_embedding: hasReal
             ? JSON.stringify(embedding)
             : JSON.stringify(new Array(EMBEDDING_DIMENSIONS).fill(0)),
-          p_query_text: conceptQueries[i] ?? concept.name,
-          p_match_count: 8,
-          p_vector_weight: hasReal ? 0.7 : 0.0,
+          query_text: queryText,
+          match_count: matchCount,
+          rrf_k: 60,
         })
-        retrievedChunks = (chunks ?? []).map((c: { content: string }) => c.content)
+        rawChunks = (chunks ?? []) as RawChunk[]
+        retrievedChunks = rawChunks.map((c) => c.enriched_content ?? c.content)
       } catch {
-        logger.warn('hybrid_search failed', { conceptId: concept.id })
+        logger.warn('hybrid_search failed', { topicId: topic.topicId })
       }
 
-      const lessonPersona = personaForLesson(i)
+      const sourceMapping = buildSourceMapping(rawChunks, docTitleMap)
+      const priorConceptNames = topicsWithContext
+        .filter((t) => t.globalIndex < topic.globalIndex)
+        .flatMap((t) => t.conceptNames)
+
+      // Spaced retrieval from 2-3 positions back
+      let spacedRetrievalItems: string[] | undefined
+      if (topic.globalIndex >= 3) {
+        const lookbackTopics = topicsWithContext.filter(
+          (t) => t.globalIndex >= topic.globalIndex - 3 && t.globalIndex <= topic.globalIndex - 2,
+        )
+        spacedRetrievalItems = lookbackTopics.flatMap((t) => {
+          const takeaways = takeawaysByTopicId.get(t.topicId)
+          return takeaways ? takeaways.slice(0, 2) : []
+        })
+      }
+
+      // Next/previous topic titles for continuity
+      const prevTopic = topicsWithContext.find((t) => t.globalIndex === topic.globalIndex - 1)
+      const nextTopic = topicsWithContext.find((t) => t.globalIndex === topic.globalIndex + 1)
+
+      const lessonPersona = personaForLesson(topicIdx)
+
       const prompt = buildLessonPrompt({
-        conceptName: String(concept.name),
-        prerequisites,
+        topicTitle: topic.topicTitle,
+        conceptNames: topic.conceptNames,
+        learningObjectives: topic.learningObjectives,
+        continuityNotes: topic.continuityNotes ?? undefined,
+        positionCurrent: topic.globalIndex + 1,
+        positionTotal: totalTopics,
+        nextTopicTitle: nextTopic?.topicTitle,
+        previousTopicTitle: prevTopic?.topicTitle,
+        prerequisites: priorConceptNames,
         retrievedChunks,
         domainInstructions: domainConfig.instructions,
         ...(lessonPersona ? { persona: lessonPersona } : {}),
+        spacedRetrievalItems,
       })
 
       const start = Date.now()
@@ -305,6 +319,7 @@ export const generateLessons = task({
           provider: 'anthropic',
           prompt_tokens: result.inputTokens,
           completion_tokens: result.outputTokens,
+          cost_usd: calculateCost(MODEL, result.inputTokens, result.outputTokens),
           latency_ms: Date.now() - start,
           task_name: 'generate-lessons',
           prompt_version: PROMPT_VERSION,
@@ -312,48 +327,46 @@ export const generateLessons = task({
           validation_passed: true,
         })
 
-        const syllabusTopicId = topicMap.get(concept.name.toLowerCase()) ?? null
-
         const { data: lesson, error: lessonError } = await supabase
           .from('lessons')
           .insert({
             workspace_id: workspaceId,
             user_id: userId,
             title: result.object.title,
-            order_index: i,
+            order_index: topic.globalIndex,
             content_markdown: '',
             structured_sections: result.object.sections,
             summary: result.object.summary ?? null,
             key_takeaways: result.object.key_takeaways,
             prompt_version: PROMPT_VERSION,
             model_used: MODEL,
-            syllabus_topic_id: syllabusTopicId,
+            syllabus_topic_id: topic.topicId,
+            source_mapping: sourceMapping,
           })
           .select('id')
           .single()
 
         if (lessonError) {
-          logger.error('Insert failed', {
-            conceptId: concept.id,
-            code: lessonError.code,
-            msg: lessonError.message,
-          })
+          logger.error('Insert failed', { topicId: topic.topicId, msg: lessonError.message })
           return
         }
 
-        await supabase.from('lesson_concepts').insert({
+        const conceptRows = topic.conceptIds.map((cid, idx) => ({
           lesson_id: lesson.id,
-          concept_id: concept.id,
-          is_primary: true,
-        })
+          concept_id: cid,
+          is_primary: idx === 0,
+        }))
+        if (conceptRows.length > 0) await supabase.from('lesson_concepts').insert(conceptRows)
+        if (result.object.key_takeaways?.length > 0)
+          takeawaysByTopicId.set(topic.topicId, result.object.key_takeaways)
 
         generatedLessons.push(lesson.id)
-        logger.info(`Lesson ${i + 1}/${orderedConcepts.length}`, {
-          conceptName: concept.name,
+        logger.info(`Lesson ${topic.globalIndex + 1}/${totalTopics}`, {
+          topicTitle: topic.topicTitle,
           lessonId: lesson.id,
         })
       } catch (err) {
-        logger.error('Failed after retries', { conceptId: concept.id, err: String(err) })
+        logger.error('Failed after retries', { topicId: topic.topicId, err: String(err) })
         await supabase.from('ai_requests').insert({
           workspace_id: workspaceId,
           user_id: userId,
@@ -361,6 +374,7 @@ export const generateLessons = task({
           provider: 'anthropic',
           prompt_tokens: 0,
           completion_tokens: 0,
+          cost_usd: 0,
           latency_ms: Date.now() - start,
           task_name: 'generate-lessons',
           prompt_version: PROMPT_VERSION,
@@ -370,23 +384,14 @@ export const generateLessons = task({
       }
     }
 
-    // Process in batches of BATCH_SIZE for parallelism
-    for (let b = 0; b < orderedConcepts.length; b += BATCH_SIZE) {
-      const batch = orderedConcepts
-        .slice(b, b + BATCH_SIZE)
-        .map((_, idx) => processOneConcept(b + idx))
-      await Promise.all(batch)
-      logger.info(`Batch done`, {
-        from: b,
-        to: Math.min(b + BATCH_SIZE, orderedConcepts.length),
-        lessonsTotal: generatedLessons.length,
-      })
+    for (let b = 0; b < newTopics.length; b += BATCH_SIZE) {
+      await Promise.all(
+        newTopics.slice(b, b + BATCH_SIZE).map((_, idx) => processOneTopic(b + idx)),
+      )
+      logger.info('Batch done', { from: b, to: Math.min(b + BATCH_SIZE, newTopics.length) })
     }
 
-    logger.info('generate-lessons complete', {
-      generated: generatedLessons.length,
-      total: orderedConcepts.length,
-    })
+    logger.info('generate-lessons complete', { generated: generatedLessons.length })
     return { lessons: generatedLessons.length }
   },
 })

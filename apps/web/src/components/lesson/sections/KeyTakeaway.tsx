@@ -4,6 +4,33 @@ interface KeyTakeawayProps {
   points: string[]
 }
 
+/** Renders inline markdown: **bold**, *italic*, `code` */
+function InlineMarkdown({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/)
+
+  return (
+    <>
+      {parts.map((segment, i) => {
+        if (segment.startsWith('**') && segment.endsWith('**'))
+          return (
+            <strong key={i} className="font-semibold text-foreground">
+              {segment.slice(2, -2)}
+            </strong>
+          )
+        if (segment.startsWith('*') && segment.endsWith('*'))
+          return <em key={i}>{segment.slice(1, -1)}</em>
+        if (segment.startsWith('`') && segment.endsWith('`'))
+          return (
+            <code key={i} className="bg-muted px-1 py-0.5 rounded text-xs font-mono">
+              {segment.slice(1, -1)}
+            </code>
+          )
+        return <span key={i}>{segment}</span>
+      })}
+    </>
+  )
+}
+
 export function KeyTakeaway({ points }: KeyTakeawayProps) {
   return (
     <div className="rounded-3xl border-2 border-primary/20 bg-primary/5 p-6 lg:p-8 space-y-4 relative overflow-hidden">
@@ -23,7 +50,9 @@ export function KeyTakeaway({ points }: KeyTakeawayProps) {
               <span className="shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
                 {i + 1}
               </span>
-              <span className="text-base text-foreground leading-relaxed">{point}</span>
+              <span className="text-base text-foreground leading-relaxed">
+                <InlineMarkdown text={point} />
+              </span>
             </li>
           ))}
         </ul>

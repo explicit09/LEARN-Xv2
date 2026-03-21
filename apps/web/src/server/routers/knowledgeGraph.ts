@@ -153,23 +153,40 @@ export const knowledgeGraphRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const userId = await resolveUserId(ctx.supabase, ctx.user.id)
 
-      // Verify source concept is in user's workspace
-      const { data: concept } = await ctx.supabase
+      // Verify both concepts are in the user's workspace.
+      const { data: sourceConcept } = await ctx.supabase
         .from('concepts')
         .select('id, workspace_id')
         .eq('id', input.sourceConcept)
         .maybeSingle()
 
-      if (!concept) throw new TRPCError({ code: 'NOT_FOUND', message: 'Concept not found' })
+      if (!sourceConcept) throw new TRPCError({ code: 'NOT_FOUND', message: 'Concept not found' })
 
-      const { data: workspace } = await ctx.supabase
+      const { data: sourceWorkspace } = await ctx.supabase
         .from('workspaces')
         .select('id')
-        .eq('id', concept.workspace_id as string)
+        .eq('id', sourceConcept.workspace_id as string)
         .eq('user_id', userId)
         .maybeSingle()
 
-      if (!workspace) throw new TRPCError({ code: 'NOT_FOUND', message: 'Concept not found' })
+      if (!sourceWorkspace) throw new TRPCError({ code: 'NOT_FOUND', message: 'Concept not found' })
+
+      const { data: targetConcept } = await ctx.supabase
+        .from('concepts')
+        .select('id, workspace_id')
+        .eq('id', input.targetConcept)
+        .maybeSingle()
+
+      if (!targetConcept) throw new TRPCError({ code: 'NOT_FOUND', message: 'Concept not found' })
+
+      const { data: targetWorkspace } = await ctx.supabase
+        .from('workspaces')
+        .select('id')
+        .eq('id', targetConcept.workspace_id as string)
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (!targetWorkspace) throw new TRPCError({ code: 'NOT_FOUND', message: 'Concept not found' })
 
       const { error } = await ctx.supabase.from('concept_relations_global').upsert(
         {

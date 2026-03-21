@@ -31,10 +31,10 @@ See `docs/01-architecture.md` for all ADRs and `docs/04-repo-structure.md` for d
 
 Two Paper.design files are the source of truth for all UI and architecture visuals. Both are pre-logged-in via Playwright (tabs 0 and 1). See `docs/15-design-files.md` for full details.
 
-| File | Purpose | Playwright Tab | Paper MCP |
-|------|---------|----------------|-----------|
-| LEARN-X | UI designs — all app screens and components | Tab 0 | Switch focus to this file |
-| LEARN-X Architecture | System architecture, pipelines, flowcharts | Tab 1 | Default MCP file |
+| File                 | Purpose                                     | Playwright Tab | Paper MCP                 |
+| -------------------- | ------------------------------------------- | -------------- | ------------------------- |
+| LEARN-X              | UI designs — all app screens and components | Tab 0          | Switch focus to this file |
+| LEARN-X Architecture | System architecture, pipelines, flowcharts  | Tab 1          | Default MCP file          |
 
 Before touching any UI component or page, check the LEARN-X design file. Before touching any pipeline or architecture decision, check LEARN-X Architecture.
 
@@ -42,14 +42,14 @@ Before touching any UI component or page, check the LEARN-X design file. Before 
 
 These are not suggestions. Read the specified doc **before** writing the first line of code for that system. Confirm in your response that you have read it.
 
-| You are about to touch… | Read this first |
-|-------------------------|-----------------|
-| Any database migration or Drizzle schema | `docs/03-database.md` — verify every column name, type, constraint, and index matches exactly |
-| Any Trigger.dev job or LLM call | `docs/07-ai-pipeline.md` — verify model, SDK, enrichment pattern, and prompt file location |
-| Any tRPC router or API route | `docs/05-api-design.md` |
-| Any lesson or generative UI component | `docs/10-generative-ui.md` |
-| Any personalization or persona logic | `docs/12-personalization-engine.md` |
-| Any RLS policy | `docs/03-database.md §Row Level Security` — use the exact pattern shown, do not invent your own |
+| You are about to touch…                  | Read this first                                                                                 |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Any database migration or Drizzle schema | `docs/03-database.md` — verify every column name, type, constraint, and index matches exactly   |
+| Any Trigger.dev job or LLM call          | `docs/07-ai-pipeline.md` — verify model, SDK, enrichment pattern, and prompt file location      |
+| Any tRPC router or API route             | `docs/05-api-design.md`                                                                         |
+| Any lesson or generative UI component    | `docs/10-generative-ui.md`                                                                      |
+| Any personalization or persona logic     | `docs/12-personalization-engine.md`                                                             |
+| Any RLS policy                           | `docs/03-database.md §Row Level Security` — use the exact pattern shown, do not invent your own |
 
 ## The 8 Rules That Cannot Be Broken
 
@@ -101,7 +101,7 @@ See `docs/02-domain-model.md`.
 ## AI Pipeline
 
 - All embeddings: `text-embedding-3-large`, 3072 dimensions. Stored in `chunk_embeddings` only.
-- All LLM calls go through Helicone proxy. Never call OpenAI/Anthropic directly.
+- All LLM calls are tracked in the `ai_requests` table. Langfuse handles observability.
 - Lesson sections are component specs (generative UI), not markdown. See `docs/10-generative-ui.md`.
 - Prompt files live in `apps/web/src/lib/ai/prompts/`. Never inline prompts in job or route files.
 - See `docs/07-ai-pipeline.md`.
@@ -117,6 +117,7 @@ See `docs/02-domain-model.md`.
 ## Task Management
 
 Before any non-trivial task (3+ steps or touches multiple files):
+
 1. Write plan to `tasks/todo.md` with checkable items
 2. Confirm approach before starting implementation
 3. Mark items complete as you go

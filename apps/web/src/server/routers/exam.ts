@@ -137,6 +137,19 @@ export const examRouter = createTRPCRouter({
 
     if (!exam) throw new TRPCError({ code: 'NOT_FOUND', message: 'Exam not found' })
 
+    const { data: questions, error: questionsError } = await ctx.supabase
+      .from('exam_questions')
+      .select('id, question, question_type, options, bloom_level, order_index')
+      .eq('exam_id', input.examId)
+      .order('order_index', { ascending: true })
+
+    if (questionsError) {
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: questionsError.message })
+    }
+    if (!questions?.length) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Exam has no questions' })
+    }
+
     const { data: attempt, error } = await ctx.supabase
       .from('exam_attempts')
       .insert({
@@ -150,12 +163,6 @@ export const examRouter = createTRPCRouter({
 
     if (error || !attempt)
       throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message })
-
-    const { data: questions } = await ctx.supabase
-      .from('exam_questions')
-      .select('id, question, question_type, options, bloom_level, order_index')
-      .eq('exam_id', input.examId)
-      .order('order_index', { ascending: true })
 
     return {
       attempt,
@@ -174,11 +181,23 @@ export const examRouter = createTRPCRouter({
 
       const { data: attempt } = await ctx.supabase
         .from('exam_attempts')
-        .select('id')
+        .select('id, exam_id, completed_at')
         .eq('id', input.attemptId)
         .eq('user_id', userId)
         .single()
       if (!attempt) throw new TRPCError({ code: 'NOT_FOUND', message: 'Attempt not found' })
+      if (attempt.completed_at) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Exam attempt already completed' })
+      }
+
+      const { data: question } = await ctx.supabase
+        .from('exam_questions')
+        .select('id, exam_id')
+        .eq('id', input.questionId)
+        .single()
+      if (!question || question.exam_id !== attempt.exam_id) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Question not found' })
+      }
 
       // Upsert response (allow overwrite before completion)
       const { data: existing } = await ctx.supabase
@@ -220,7 +239,7 @@ export const examRouter = createTRPCRouter({
 
     const { data: attempt } = await ctx.supabase
       .from('exam_attempts')
-      .select('id, exam_id, completed_at')
+      .select('id, exam_id, completed_at, started_at')
       .eq('id', input.attemptId)
       .eq('user_id', userId)
       .single()
@@ -230,7 +249,7 @@ export const examRouter = createTRPCRouter({
     // Fetch all questions with correct answers
     const { data: questions } = await ctx.supabase
       .from('exam_questions')
-      .select('id, question_type, correct_answer, explanation')
+      .select('id, question_type, correct_answer, explanation, concept_id')
       .eq('exam_id', attempt.exam_id)
 
     // Fetch all responses
@@ -242,30 +261,34 @@ export const examRouter = createTRPCRouter({
     const questionsMap = new Map((questions ?? []).map((q) => [q.id, q]))
 
     let correct = 0
-    const total = questions?.length ?? 0
-    const reviewed = []
+    let graded = 0
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reviewed: any[] = []
 
     for (const response of responses ?? []) {
       const question = questionsMap.get(response.question_id)
       if (!question) continue
 
-      const autoGradable =
-        question.question_type === 'mcq' || question.question_type === 'true_false'
-      const isCorrect = autoGradable
-        ? response.user_answer?.trim().toLowerCase() ===
-          question.correct_answer?.trim().toLowerCase()
-        : null
+      const userNorm = (response.user_answer ?? '').trim().toLowerCase()
+      const correctNorm = (question.correct_answer ?? '').trim().toLowerCase()
 
-      if (isCorrect) correct++
+      let isCorrect: boolean | null = null
+      if (question.question_type === 'mcq' || question.question_type === 'true_false') {
+        isCorrect = userNorm === correctNorm
+      } else if (
+        question.question_type === 'short_answer' ||
+        question.question_type === 'fill_blank'
+      ) {
+        isCorrect =
+          userNorm === correctNorm ||
+          correctNorm.includes(userNorm) ||
+          userNorm.includes(correctNorm)
+      }
 
-      await ctx.supabase
-        .from('exam_responses')
-        .update({
-          is_correct: isCorrect,
-          feedback: question.explanation ?? null,
-          points_earned: isCorrect ? 1 : 0,
-        })
-        .eq('id', response.id)
+      if (isCorrect !== null) {
+        graded++
+        if (isCorrect) correct++
+      }
 
       reviewed.push({
         questionId: response.question_id,
@@ -276,16 +299,24 @@ export const examRouter = createTRPCRouter({
       })
     }
 
-    const score = total > 0 ? correct / total : 0
+    // Batch update all responses at once
+    const updatePromises = (responses ?? []).map((response) => {
+      const question = questionsMap.get(response.question_id)
+      if (!question) return Promise.resolve()
+      const r = reviewed.find((rv) => rv.questionId === response.question_id)
+      return ctx.supabase
+        .from('exam_responses')
+        .update({
+          is_correct: r?.isCorrect ?? null,
+          feedback: question.explanation ?? null,
+          points_earned: r?.isCorrect ? 1 : r?.isCorrect === false ? 0 : null,
+        })
+        .eq('id', response.id)
+    })
+    await Promise.all(updatePromises)
 
-    const startedAtRow = await ctx.supabase
-      .from('exam_attempts')
-      .select('started_at')
-      .eq('id', input.attemptId)
-      .single()
-    const startedAt = startedAtRow.data?.started_at
-      ? new Date(startedAtRow.data.started_at as string)
-      : new Date()
+    const score = graded > 0 ? correct / graded : 0
+    const startedAt = attempt.started_at ? new Date(attempt.started_at as string) : new Date()
     const timeSpentSeconds = Math.floor((Date.now() - startedAt.getTime()) / 1000)
 
     await ctx.supabase
@@ -297,7 +328,32 @@ export const examRouter = createTRPCRouter({
       })
       .eq('id', input.attemptId)
 
-    return { score, total, correct, timeSpentSeconds, reviewed }
+    // Upsert mastery records for exam concepts
+    const conceptIds = [
+      ...new Set((questions ?? []).map((q) => q.concept_id as string).filter(Boolean)),
+    ]
+    if (conceptIds.length > 0) {
+      const { data: exam } = await ctx.supabase
+        .from('exams')
+        .select('workspace_id')
+        .eq('id', attempt.exam_id)
+        .single()
+      if (exam) {
+        const masteryLevel = Math.min(0.3 + score * 0.5, 1.0)
+        const masteryRows = conceptIds.map((conceptId) => ({
+          user_id: userId,
+          concept_id: conceptId,
+          workspace_id: exam.workspace_id,
+          mastery_level: masteryLevel,
+          source: 'exam',
+        }))
+        await ctx.supabase
+          .from('mastery_records')
+          .upsert(masteryRows, { onConflict: 'user_id,concept_id', ignoreDuplicates: false })
+      }
+    }
+
+    return { score, total: graded, correct, timeSpentSeconds, reviewed }
   }),
 
   /**

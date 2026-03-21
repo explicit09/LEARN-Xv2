@@ -20,6 +20,7 @@ export {
   getLessonSchema,
   markCompleteSchema,
   triggerGenerateLessonsSchema,
+  submitLessonRatingSchema,
 } from './lesson'
 export type { LessonSection } from './lesson'
 export {
@@ -85,3 +86,27 @@ export type {
   SendRoomMessageInput,
   ListRoomsInput,
 } from './studyRoom'
+export {
+  podcastFormatEnum,
+  podcastStatusEnum,
+  ttsProviderEnum,
+  podcastSpeakerEnum,
+  generatePodcastSchema,
+  getPodcastSchema,
+  getPodcastByIdSchema,
+  listPodcastsSchema,
+  listAllPodcastsSchema,
+  deletePodcastSchema,
+  podcastSegmentSchema,
+  dialogueSegmentSchema,
+  dialogueOutputSchema,
+} from './podcast'
+export type {
+  PodcastFormat,
+  PodcastStatus,
+  TTSProvider,
+  PodcastSpeaker,
+  DialogueSegment,
+  DialogueOutput,
+  PodcastSegment,
+} from './podcast'

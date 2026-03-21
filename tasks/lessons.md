@@ -123,3 +123,13 @@ Login, Dashboard, Workspace Detail (all 8 tabs), Lesson Reader, Chat, Quizzes, F
 - `apps/web/src/components/document/DocumentList.tsx` — Auto-polling
 - `apps/web/src/app/(app)/dashboard/page.tsx` — CreateWorkspaceModal
 - `apps/web/src/app/(app)/workspace/[id]/page.tsx` — Flashcards tab, default to documents
+
+---
+
+## 2026-03-20 Declared Paper alignment too early
+
+**Pattern:** Marked the dashboard/workspaces UI revamp complete after code-level improvements and targeted checks, but before re-comparing the live app against the canonical Paper artboards in the browser. The implementation was cleaner, yet it still looked materially different from the approved Paper direction.
+
+**Rule:** For any Paper-led UI task, do not call the slice done until the live route has been visually compared against the matching Paper artboard in-browser. Verify layout density, contrast, dark/light translation, and card tone with screenshots, not just code review.
+
+**Why:** Paper is the visual source of truth in this repo. A route can satisfy the plan semantically while still missing the intended visual language. Browser verification against the actual artboards is required to catch drift in light mode, surface contrast, and composition.

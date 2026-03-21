@@ -23,9 +23,30 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [urlMode, setUrlMode] = useState(false)
+  const [urlValue, setUrlValue] = useState('')
 
   const initiate = trpc.document.initiateUpload.useMutation()
   const confirm = trpc.document.confirmUpload.useMutation()
+  const ingestUrl = trpc.document.ingestUrl.useMutation()
+
+  const uploadWithProgress = useCallback(
+    (url: string, file: File): Promise<void> =>
+      new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('PUT', url)
+        xhr.setRequestHeader('Content-Type', file.type)
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100))
+        }
+        xhr.onload = () =>
+          xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error('Upload failed'))
+        xhr.onerror = () => reject(new Error('Upload failed'))
+        xhr.send(file)
+      }),
+    [],
+  )
 
   const processFile = useCallback(
     async (file: File) => {
@@ -41,6 +62,7 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
       }
 
       setUploading(true)
+      setUploadProgress(0)
       try {
         const result = await initiate.mutateAsync({
           workspaceId,
@@ -49,24 +71,39 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
           fileSizeBytes: file.size,
         })
 
-        // Upload directly to Supabase Storage via signed URL
-        const uploadRes = await fetch(result.signedUploadUrl, {
-          method: 'PUT',
-          body: file,
-          headers: { 'Content-Type': file.type },
-        })
-        if (!uploadRes.ok) throw new Error('Upload to storage failed')
-
-        // Confirm upload and kick off processing job
+        await uploadWithProgress(result.signedUploadUrl, file)
         await confirm.mutateAsync({ documentId: result.documentId })
         onUploadComplete?.()
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Upload failed')
       } finally {
         setUploading(false)
+        setUploadProgress(0)
       }
     },
-    [workspaceId, initiate, confirm, onUploadComplete],
+    [workspaceId, initiate, confirm, uploadWithProgress, onUploadComplete],
+  )
+
+  const handleUrlSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault()
+      const url = urlValue.trim()
+      if (!url) return
+
+      setError(null)
+      setUploading(true)
+      try {
+        await ingestUrl.mutateAsync({ workspaceId, url })
+        setUrlValue('')
+        setUrlMode(false)
+        onUploadComplete?.()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to ingest URL')
+      } finally {
+        setUploading(false)
+      }
+    },
+    [workspaceId, urlValue, ingestUrl, onUploadComplete],
   )
 
   const handleDrop = useCallback(
@@ -89,7 +126,7 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
   )
 
   return (
-    <div className="w-full">
+    <div className="w-full space-y-3">
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
@@ -122,11 +159,21 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
           />
         </svg>
         {uploading ? (
-          <p className="text-sm font-medium">Uploading…</p>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-sm font-medium">Uploading… {uploadProgress}%</p>
+            <div className="h-1.5 w-48 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-300"
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+          </div>
         ) : (
           <>
             <p className="text-sm font-medium">Drop a file here or click to browse</p>
-            <p className="mt-1 text-xs text-muted-foreground">PDF, DOCX, TXT, MD — up to 50MB</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              PDF, DOCX, PPTX, TXT, MD, HTML — up to 50MB
+            </p>
           </>
         )}
       </button>
@@ -139,7 +186,46 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
         onChange={handleFileChange}
       />
 
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+      {urlMode ? (
+        <form onSubmit={handleUrlSubmit} className="flex gap-2">
+          <input
+            type="url"
+            value={urlValue}
+            onChange={(e) => setUrlValue(e.target.value)}
+            placeholder="Paste a URL or YouTube link"
+            disabled={uploading}
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <button
+            type="submit"
+            disabled={uploading || !urlValue.trim()}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            Ingest
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setUrlMode(false)
+              setUrlValue('')
+              setError(null)
+            }}
+            className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+          >
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setUrlMode(true)}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Or paste a URL / YouTube link
+        </button>
+      )}
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )
 }

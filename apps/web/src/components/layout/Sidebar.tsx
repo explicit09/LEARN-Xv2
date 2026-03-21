@@ -1,108 +1,45 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { cn } from '@learn-x/utils'
 import { createClient } from '@/lib/supabase/client'
-import { trpc } from '@/lib/trpc/client'
-
-function DueCount() {
-  const { data } = trpc.notification.getDailyDigest.useQuery(
-    {},
-    {
-      staleTime: 60_000,
-    },
-  )
-  const dueFlashcards = data?.dueFlashcards ?? 0
-  const fadingCount = data?.fadingConcepts?.length ?? 0
-  const total = dueFlashcards + fadingCount
-  if (!total) return null
-  return (
-    <span
-      className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-white tabular-nums"
-      aria-label={`${total} items due`}
-    >
-      {total > 99 ? '99+' : total}
-    </span>
-  )
-}
+import {
+  ChevronLeft,
+  ChevronRight,
+  LayoutDashboard,
+  FolderOpen,
+  Headphones,
+  LogOut,
+} from 'lucide-react'
 
 const NAV_ITEMS = [
   {
     label: 'Dashboard',
     href: '/dashboard',
-    icon: (
-      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-        />
-      </svg>
-    ),
+    icon: LayoutDashboard,
+    shortLabel: 'Home',
   },
   {
     label: 'Workspaces',
     href: '/workspaces',
-    icon: (
-      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-        />
-      </svg>
-    ),
+    icon: FolderOpen,
+    shortLabel: 'Spaces',
   },
   {
-    label: 'Study Queue',
-    href: '/study',
-    icon: (
-      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-        />
-      </svg>
-    ),
-  },
-  {
-    label: 'Mastery',
-    href: '/mastery',
-    icon: (
-      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-        />
-      </svg>
-    ),
-  },
-  {
-    label: 'Analytics',
-    href: '/analytics',
-    icon: (
-      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={1.5}
-          d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-        />
-      </svg>
-    ),
+    label: 'Podcasts',
+    href: '/podcasts',
+    icon: Headphones,
+    shortLabel: 'Audio',
   },
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const [isCollapsed, setIsCollapsed] = useState(pathname.includes('/workspace/'))
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -112,50 +49,126 @@ export function Sidebar() {
   }
 
   return (
-    <aside
-      className="flex h-full w-56 flex-col bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))]"
-      aria-label="Sidebar"
-    >
-      <div className="flex h-14 items-center border-b border-border/20 px-4">
-        <span className="font-semibold tracking-tight text-foreground">LEARN-X</span>
-      </div>
-
-      <nav className="flex-1 space-y-0.5 p-2" aria-label="Primary">
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={pathname === item.href ? 'page' : undefined}
-            className={cn(
-              'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
-              pathname === item.href || pathname.startsWith(item.href + '/')
-                ? 'bg-primary text-primary-foreground font-medium'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            )}
-          >
-            {item.icon}
-            {item.label}
-            {item.href === '/study' && <DueCount />}
-          </Link>
-        ))}
-      </nav>
-
-      <div className="border-t border-border/20 p-2">
+    <>
+      <aside
+        className={cn(
+          'relative hidden h-screen shrink-0 flex-col border-r border-white/20 bg-white/60 shadow-xl backdrop-blur-xl transition-all duration-300 dark:border-white/10 dark:bg-slate-900/60 md:flex',
+          isCollapsed ? 'w-20' : 'w-[280px]',
+        )}
+        aria-label="Sidebar"
+      >
         <button
-          onClick={handleSignOut}
-          className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          type="button"
+          onClick={() => setIsCollapsed((value) => !value)}
+          className="absolute -right-3 top-4 z-50 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-md hover:bg-muted"
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-            />
-          </svg>
-          Sign out
+          {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
         </button>
-      </div>
-    </aside>
+
+        <div
+          className={cn(
+            'flex h-16 items-center border-b border-white/10 px-4 dark:border-white/5',
+            isCollapsed && 'justify-center px-2',
+          )}
+        >
+          {isCollapsed ? (
+            <Link href="/dashboard" className="relative flex h-10 w-40 items-center">
+              <Image
+                src="/images/learn-x-new-logo.png"
+                alt="LEARN-X"
+                fill
+                sizes="160px"
+                className="object-contain"
+                priority
+              />
+            </Link>
+          ) : (
+            <Link href="/dashboard" className="relative flex h-16 w-64 items-center scale-110">
+              <Image
+                src="/images/learn-x-new-logo.png"
+                alt="LEARN-X"
+                fill
+                sizes="256px"
+                className="object-contain"
+                priority
+              />
+            </Link>
+          )}
+        </div>
+
+        <div className="flex-1 px-3 py-6">
+          <nav className="space-y-2">
+            {NAV_ITEMS.map((item) => {
+              const isActive = pathname === item.href
+              const Icon = item.icon
+
+              return (
+                <Link key={item.href} href={item.href}>
+                  <div
+                    className={cn(
+                      'flex min-h-[44px] items-center gap-3 rounded-xl px-3 py-3 transition-all duration-200',
+                      isActive
+                        ? 'bg-primary/10 text-primary font-semibold shadow-sm ring-1 ring-primary/20'
+                        : 'text-muted-foreground hover:bg-white/50 hover:text-foreground dark:hover:bg-white/5',
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        'h-5 w-5 shrink-0',
+                        isActive ? 'text-primary' : 'text-muted-foreground',
+                      )}
+                    />
+                    {!isCollapsed && (
+                      <span className="overflow-hidden whitespace-nowrap">{item.label}</span>
+                    )}
+                    {isActive && !isCollapsed && (
+                      <div className="ml-auto h-1.5 w-1.5 rounded-full bg-primary" />
+                    )}
+                  </div>
+                </Link>
+              )
+            })}
+          </nav>
+        </div>
+        <div className="space-y-2 border-t border-white/10 bg-white/30 p-3 backdrop-blur-sm dark:border-white/5 dark:bg-black/20">
+          <button
+            onClick={handleSignOut}
+            className="flex min-h-[44px] w-full items-center gap-3 rounded-xl px-3 py-2 text-red-500 transition-all duration-200 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/20"
+          >
+            <LogOut className="h-5 w-5 shrink-0" />
+            {!isCollapsed && <span className="font-medium">Logout</span>}
+          </button>
+        </div>
+      </aside>
+
+      <nav
+        className="fixed inset-x-4 bottom-4 z-40 flex items-center justify-between rounded-[24px] border border-white/30 bg-white/80 px-2 py-2 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.24)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-900/85 md:hidden"
+        aria-label="Mobile navigation"
+      >
+        {NAV_ITEMS.map((item) => {
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+          const Icon = item.icon
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium transition-colors',
+                isActive
+                  ? 'bg-primary/12 text-primary'
+                  : 'text-muted-foreground hover:text-foreground dark:hover:text-slate-100',
+              )}
+            >
+              <div className="relative">
+                <Icon className="h-4 w-4" />
+              </div>
+              <span className="truncate">{item.shortLabel}</span>
+            </Link>
+          )
+        })}
+      </nav>
+    </>
   )
 }

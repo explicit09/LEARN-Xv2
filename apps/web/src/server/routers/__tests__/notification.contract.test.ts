@@ -54,4 +54,50 @@ describe('notification.getDailyDigest', () => {
 
     await ctx._cleanup?.()
   })
+
+  it('counts due flashcards for the authenticated user', async () => {
+    const ctx = await createTestContext({ authenticated: true })
+    const caller = createCaller(ctx)
+
+    try {
+      const workspace = await createTestWorkspace(ctx)
+      const { data: set } = await ctx.supabase
+        .from('flashcard_sets')
+        .insert({
+          workspace_id: workspace.id,
+          title: 'Digest Set',
+          source_type: 'manual',
+        })
+        .select('id')
+        .single()
+
+      await ctx.supabase.from('flashcards').insert({
+        set_id: set!.id,
+        front: 'Due card',
+        back: 'Answer',
+        due_at: new Date(Date.now() - 60_000).toISOString(),
+      })
+
+      const digest = await caller.notification.getDailyDigest({})
+      expect(digest.dueFlashcards).toBeGreaterThan(0)
+    } finally {
+      await ctx._cleanup?.()
+    }
+  })
+
+  it('rejects another user workspace when workspaceId is provided', async () => {
+    const ownerCtx = await createTestContext({ authenticated: true })
+    const outsiderCtx = await createTestContext({ authenticated: true })
+
+    try {
+      const ownerWorkspace = await createTestWorkspace(ownerCtx)
+
+      await expect(
+        createCaller(outsiderCtx).notification.getDailyDigest({ workspaceId: ownerWorkspace.id }),
+      ).rejects.toThrow(expect.objectContaining({ code: 'NOT_FOUND' } satisfies Partial<TRPCError>))
+    } finally {
+      await outsiderCtx._cleanup?.()
+      await ownerCtx._cleanup?.()
+    }
+  })
 })

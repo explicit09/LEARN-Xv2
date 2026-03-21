@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
-import { anthropic, MODEL_ROUTES } from '../lib/ai'
-import { buildGenerateSyllabusPrompt, PROMPT_VERSION } from '../lib/prompts/generate-syllabus.v1'
+import { getProvider, getProviderName, MODEL_ROUTES, calculateCost } from '../lib/ai'
+import { buildGenerateSyllabusPrompt, PROMPT_VERSION } from '../lib/prompts/generate-syllabus.v2'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -20,6 +20,8 @@ function makeSupabase() {
 }
 
 const syllabusSchema = z.object({
+  totalLessons: z.number(),
+  learningPathRationale: z.string(),
   units: z.array(
     z.object({
       title: z.string(),
@@ -29,6 +31,10 @@ const syllabusSchema = z.object({
           description: z.string(),
           conceptNames: z.array(z.string()),
           documentTitles: z.array(z.string()),
+          learningObjectives: z.array(z.string()),
+          prerequisiteTopicIndices: z.array(z.number()),
+          continuityNotes: z.string(),
+          estimatedDurationMinutes: z.number(),
         }),
       ),
     }),
@@ -37,16 +43,17 @@ const syllabusSchema = z.object({
 
 export const generateSyllabus = task({
   id: 'generate-syllabus',
+  maxDuration: 900,
   retry: { maxAttempts: 2 },
 
   run: async (payload: GenerateSyllabusPayload) => {
     const { workspaceId } = payload
     const supabase = makeSupabase()
 
-    // ── 1. Fetch concepts + documents ────────────────────────
+    // ── 1. Fetch concepts with descriptions + tags ──────────
     const { data: concepts } = await supabase
       .from('concepts')
-      .select('name')
+      .select('id, name, description, tags')
       .eq('workspace_id', workspaceId)
       .order('name', { ascending: true })
 
@@ -56,19 +63,47 @@ export const generateSyllabus = task({
       .eq('workspace_id', workspaceId)
       .eq('status', 'ready')
 
-    const conceptNames = (concepts ?? []).map((c) => c.name as string)
+    const conceptList = (concepts ?? []).map((c) => ({
+      name: c.name as string,
+      description: (c.description as string) ?? undefined,
+      tags: (c.tags as string[]) ?? undefined,
+    }))
     const docTitles = (documents ?? []).map((d) => d.title as string)
 
-    // ── 2. Guard: need at least 2 concepts ───────────────────
-    if (conceptNames.length < 2) {
+    // ── 2. Guard: need at least 2 concepts ──────────────────
+    if (conceptList.length < 2) {
       logger.info('Not enough concepts to generate syllabus', {
         workspaceId,
-        count: conceptNames.length,
+        count: conceptList.length,
       })
       return { units: 0 }
     }
 
-    // ── 3. Supersede existing active syllabuses ───────────────
+    // ── 2b. Fetch concept relations ─────────────────────────
+    const conceptIds = (concepts ?? []).map((c) => c.id as string)
+    const { data: relationsData } = await supabase
+      .from('concept_relations')
+      .select('source_concept_id, target_concept_id, relation_type')
+      .in('source_concept_id', conceptIds)
+
+    const conceptIdToName = new Map((concepts ?? []).map((c) => [c.id as string, c.name as string]))
+    const relations = (relationsData ?? [])
+      .map((r) => ({
+        source: conceptIdToName.get(r.source_concept_id as string) ?? '',
+        target: conceptIdToName.get(r.target_concept_id as string) ?? '',
+        type: r.relation_type as string,
+      }))
+      .filter((r) => r.source && r.target)
+
+    // ── 2c. Fetch workspace domain metadata ─────────────────
+    const { data: workspace } = await supabase
+      .from('workspaces')
+      .select('settings')
+      .eq('id', workspaceId)
+      .single()
+    const wsSettings = (workspace?.settings as Record<string, unknown>) ?? {}
+
+    // ── 3. Supersede existing active syllabuses ─────────────
     const { data: existing } = await supabase
       .from('syllabuses')
       .select('id, version')
@@ -88,16 +123,24 @@ export const generateSyllabus = task({
 
     const nextVersion = existing ? (existing.version as number) + 1 : 1
 
-    // ── 4. Call LLM via Vercel AI SDK ─────────────────────────
-    const MODEL = MODEL_ROUTES.CONCEPT_EXTRACTION
-    const prompt = buildGenerateSyllabusPrompt(conceptNames, docTitles)
+    // ── 4. Call LLM via Vercel AI SDK ───────────────────────
+    const MODEL = MODEL_ROUTES.SYLLABUS_PLANNING
+    const provider = getProvider(MODEL)
+    const prompt = buildGenerateSyllabusPrompt({
+      concepts: conceptList,
+      relations,
+      docTitles,
+      domain: wsSettings.primaryDomain as string | undefined,
+      subfield: wsSettings.subfield as string | undefined,
+      scaffoldingDirection: wsSettings.scaffoldingDirection as string | undefined,
+    })
     const start = Date.now()
 
     let syllabusResult: z.infer<typeof syllabusSchema>
     let usage = { inputTokens: 0, outputTokens: 0 }
     try {
       const result = await generateText({
-        model: anthropic(MODEL),
+        model: provider(MODEL),
         output: Output.object({ schema: syllabusSchema }),
         prompt,
       })
@@ -111,14 +154,14 @@ export const generateSyllabus = task({
       return { units: 0 }
     }
 
-    // ── 5. Record AI request ──────────────────────────────────
+    // ── 5. Record AI request ────────────────────────────────
     await supabase.from('ai_requests').insert({
       workspace_id: workspaceId,
       model: MODEL,
-      provider: 'anthropic',
+      provider: getProviderName(MODEL),
       prompt_tokens: usage.inputTokens,
       completion_tokens: usage.outputTokens,
-      cost_usd: (usage.inputTokens ?? 0) * 0.000003 + (usage.outputTokens ?? 0) * 0.000015,
+      cost_usd: calculateCost(MODEL, usage.inputTokens, usage.outputTokens),
       latency_ms: Date.now() - start,
       task_name: 'generate-syllabus',
       prompt_version: PROMPT_VERSION,
@@ -130,7 +173,7 @@ export const generateSyllabus = task({
       return { units: 0 }
     }
 
-    // ── 6. Insert syllabus ────────────────────────────────────
+    // ── 6. Insert syllabus ──────────────────────────────────
     const { data: syllabus, error: syllabusError } = await supabase
       .from('syllabuses')
       .insert({ workspace_id: workspaceId, version: nextVersion, status: 'active' })
@@ -160,8 +203,11 @@ export const generateSyllabus = task({
       docMap.set((d.title as string).toLowerCase(), d.id as string)
     }
 
-    // ── 7. Insert units + topics ──────────────────────────────
+    // ── 7. Insert units + topics with enriched fields ───────
     let totalUnits = 0
+    // Track all topic DB IDs for prerequisite resolution
+    const topicDbIds: string[] = []
+
     for (let uIdx = 0; uIdx < units.length; uIdx++) {
       const unit = units[uIdx]!
       const { data: unitRow, error: unitError } = await supabase
@@ -182,10 +228,17 @@ export const generateSyllabus = task({
             title: topic.title,
             description: topic.description || null,
             order_index: tIdx,
+            learning_objectives: topic.learningObjectives ?? [],
+            continuity_notes: topic.continuityNotes || null,
+            estimated_duration_minutes: topic.estimatedDurationMinutes ?? 30,
           })
           .select()
           .single()
-        if (topicError || !topicRow) continue
+        if (topicError || !topicRow) {
+          topicDbIds.push('')
+          continue
+        }
+        topicDbIds.push(topicRow.id as string)
 
         // Link topic → concepts
         const topicConceptRows = (topic.conceptNames ?? [])
@@ -207,9 +260,38 @@ export const generateSyllabus = task({
       }
     }
 
-    logger.info('Syllabus generated', { workspaceId, units: totalUnits, version: nextVersion })
+    // ── 8. Resolve prerequisite_topic_ids ────────────────────
+    // Flatten topics to get global indices, then map prerequisiteTopicIndices to DB IDs
+    let globalIdx = 0
+    for (const unit of units) {
+      for (const topic of unit.topics) {
+        const dbId = topicDbIds[globalIdx]
+        if (dbId) {
+          const prereqIds = (topic.prerequisiteTopicIndices ?? [])
+            .map((i) => topicDbIds[i])
+            .filter((id): id is string => Boolean(id))
+          if (prereqIds.length > 0) {
+            await supabase
+              .from('syllabus_topics')
+              .update({ prerequisite_topic_ids: prereqIds })
+              .eq('id', dbId)
+          }
+        }
+        globalIdx++
+      }
+    }
 
-    // ── Trigger lesson generation (best-effort) ──────────────────
+    logger.info('Syllabus generated', {
+      workspaceId,
+      units: totalUnits,
+      version: nextVersion,
+      totalTopics: topicDbIds.filter(Boolean).length,
+      rationale: syllabusResult.learningPathRationale,
+    })
+
+    // ── Trigger lesson generation ────────────────────────────
+    // Use triggerAndWait so the lesson job starts immediately as a child
+    // task instead of going through the queue (eliminates ~90s scheduling gap).
     try {
       const { data: ws } = await supabase
         .from('workspaces')
@@ -218,11 +300,12 @@ export const generateSyllabus = task({
         .single()
       if (ws?.user_id) {
         const { generateLessons } = await import('./generate-lessons')
-        await generateLessons.trigger({ workspaceId, userId: ws.user_id as string })
-        logger.info('Triggered generate-lessons', { workspaceId })
+        await generateLessons.triggerAndWait({ workspaceId, userId: ws.user_id as string })
+        logger.info('generate-lessons completed', { workspaceId })
       }
-    } catch {
-      // best-effort — don't fail syllabus job if lesson trigger fails
+    } catch (err) {
+      // Don't fail syllabus job if lesson generation fails
+      logger.error('generate-lessons failed', { error: String(err) })
     }
 
     return { units: totalUnits }

@@ -2,7 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { createOpenAI } from '@ai-sdk/openai'
 
-// Direct API providers — swap to Helicone proxy once signups reopen
+// AI provider clients
 export const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 })

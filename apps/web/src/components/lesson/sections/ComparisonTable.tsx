@@ -7,6 +7,14 @@ interface ComparisonTableProps {
 }
 
 export function ComparisonTable({ title, columns, rows }: ComparisonTableProps) {
+  // If columns count matches values count + 1, the first column is a label header
+  // (e.g. columns=["Feature","Mass","Density"] with values=["mass val","density val"])
+  // Skip the first column since row.label already serves as the row header
+  const firstRow = rows[0]
+  const hasLabelColumn =
+    firstRow && columns.length > 0 && firstRow.values.length === columns.length - 1
+  const displayColumns = hasLabelColumn ? columns.slice(1) : columns
+
   return (
     <div className="rounded-3xl border border-border bg-card/60 backdrop-blur-xl p-6 lg:p-8 space-y-4">
       <div className="flex items-center gap-2.5">
@@ -21,9 +29,14 @@ export function ComparisonTable({ title, columns, rows }: ComparisonTableProps) 
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted/60">
-              <th className="text-left py-3 px-4 font-bold text-foreground text-xs uppercase tracking-wider"></th>
-              {columns.map((col, i) => (
-                <th key={i} className="text-left py-3 px-4 font-bold text-foreground text-xs uppercase tracking-wider">
+              <th className="text-left py-3 px-4 font-bold text-foreground text-xs uppercase tracking-wider">
+                {hasLabelColumn ? columns[0] : ''}
+              </th>
+              {displayColumns.map((col, i) => (
+                <th
+                  key={i}
+                  className="text-left py-3 px-4 font-bold text-foreground text-xs uppercase tracking-wider"
+                >
                   {col}
                 </th>
               ))}

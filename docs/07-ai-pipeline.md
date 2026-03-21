@@ -33,14 +33,14 @@ Query (chat / quiz / lesson generation)
 
 ## Phase 1 AI Stack (TypeScript only)
 
-| Task               | Tool                                               | Notes                                                |
-| ------------------ | -------------------------------------------------- | ---------------------------------------------------- |
-| Document parsing   | unpdf (local) + Gemini Flash fallback              | Local text extraction; Gemini OCR for scanned PDFs   |
-| Chunking           | Custom TypeScript logic                            | Structure-aware + contextual enrichment, see below   |
-| Embeddings         | OpenAI `text-embedding-3-large` via Helicone       | 3072 dimensions, batch API, stored as `halfvec`      |
-| Content generation | Claude Sonnet 4.6 via Vercel AI SDK + Helicone     | Lessons, concept extraction, chat                    |
-| Fast generation    | Gemini 3.1 Flash-Lite via Vercel AI SDK + Helicone | Quizzes, flashcards, study guides — $0.25/MTok       |
-| Reranking          | None in Phase 1                                    | Add Cohere Rerank in Phase 2 when quality demands it |
+| Task               | Tool                                    | Notes                                                |
+| ------------------ | --------------------------------------- | ---------------------------------------------------- |
+| Document parsing   | unpdf (local) + Gemini Flash fallback   | Local text extraction; Gemini OCR for scanned PDFs   |
+| Chunking           | Custom TypeScript logic                 | Structure-aware + contextual enrichment, see below   |
+| Embeddings         | OpenAI `text-embedding-3-large`         | 3072 dimensions, batch API, stored as `halfvec`      |
+| Content generation | Claude Sonnet 4.6 via Vercel AI SDK     | Lessons, concept extraction, chat                    |
+| Fast generation    | Gemini 3.1 Flash-Lite via Vercel AI SDK | Quizzes, flashcards, study guides — $0.25/MTok       |
+| Reranking          | None in Phase 1                         | Add Cohere Rerank in Phase 2 when quality demands it |
 
 Phase 2 adds the Python FastAPI service for Docling (table extraction), custom reranking, and more complex RAG pipelines.
 
@@ -250,7 +250,7 @@ Always batch embed. Never embed one-by-one.
 
 ```typescript
 async function generateEmbeddings(texts: string[]): Promise<number[][]> {
-  // Helicone proxy → OpenAI
+  // OpenAI batch embedding
   const BATCH_SIZE = 100
   const batches = chunk(texts, BATCH_SIZE)
   const embeddings: number[][] = []

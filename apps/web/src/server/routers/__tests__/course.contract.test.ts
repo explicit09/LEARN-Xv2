@@ -135,3 +135,29 @@ describe('course.inviteStudent', () => {
     )
   })
 })
+
+// ── course.getAtRiskStudents ──────────────────────────────────────────────────
+
+describe('course.getAtRiskStudents', () => {
+  it('does not flag every newly enrolled student as at-risk by default', async () => {
+    const instructorCtx = await createTestContext({ authenticated: true })
+    const studentCtx = await createTestContext({ authenticated: true })
+
+    try {
+      const instructorCaller = createCaller(instructorCtx)
+      const studentCaller = createCaller(studentCtx)
+
+      const course = await instructorCaller.course.create({ title: 'Signals 101' })
+
+      await instructorCtx.supabase.from('courses').update({ status: 'active' }).eq('id', course.id)
+
+      await studentCaller.course.join({ joinCode: course.joinCode })
+
+      const atRisk = await instructorCaller.course.getAtRiskStudents({ courseId: course.id })
+      expect(atRisk).toHaveLength(0)
+    } finally {
+      await studentCtx._cleanup?.()
+      await instructorCtx._cleanup?.()
+    }
+  })
+})

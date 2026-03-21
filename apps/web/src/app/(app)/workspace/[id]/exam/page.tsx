@@ -3,6 +3,8 @@
 import { use } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc/client'
+import { BookOpen, ChevronLeft, ClipboardCheck } from 'lucide-react'
+import { Button } from '@learn-x/ui'
 
 interface ExamPageProps {
   params: Promise<{ id: string }>
@@ -118,8 +120,49 @@ function ExamList({ workspaceId }: { workspaceId: string }) {
 export default function ExamPage({ params }: ExamPageProps) {
   const { id } = use(params)
   return (
-    <div className="mx-auto max-w-3xl">
-      <ExamList workspaceId={id} />
+    <div className="min-h-screen bg-background">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-50/40 via-purple-50/20 to-pink-50/20 dark:from-blue-950/20 dark:via-purple-950/10 dark:to-pink-950/10" />
+      <div className="relative z-10 mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <Link
+              href={`/workspace/${id}?tab=overview`}
+              className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>Back</span>
+            </Link>
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 text-blue-500 dark:text-blue-400">
+                <BookOpen className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-muted-foreground">
+                  Workspace Exam
+                </p>
+                <h1 className="text-xl font-bold">Assessments</h1>
+              </div>
+            </div>
+          </div>
+
+          <Button asChild variant="outline" className="rounded-xl">
+            <Link href={`/workspace/${id}?tab=overview`}>Return to Workspace</Link>
+          </Button>
+        </div>
+
+        <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 shadow-sm backdrop-blur-sm sm:p-8">
+          <div className="mb-6">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
+              <ClipboardCheck className="h-3.5 w-3.5" />
+              Formal Review
+            </div>
+            <p className="text-sm text-muted-foreground sm:text-base">
+              Generate timed assessments from this workspace and measure what still needs work.
+            </p>
+          </div>
+          <ExamList workspaceId={id} />
+        </div>
+      </div>
     </div>
   )
 }

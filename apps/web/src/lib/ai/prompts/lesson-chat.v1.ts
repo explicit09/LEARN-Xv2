@@ -1,7 +1,6 @@
-import { LESSON_COMPONENT_INSTRUCTIONS } from './lesson-generation.v1'
 import type { PersonaContext } from './chat-system.v1'
 
-export const LESSON_CHAT_PROMPT_VERSION = 'lesson-chat.v1'
+export const LESSON_CHAT_PROMPT_VERSION = 'lesson-chat.v2'
 
 export interface LessonChatPromptParams {
   lessonTitle: string
@@ -11,28 +10,53 @@ export interface LessonChatPromptParams {
   domainInstructions?: string | undefined
 }
 
+/**
+ * Build the SYSTEM prompt — lean tutor persona only.
+ * Lesson data goes in a separate context message to leverage prompt caching
+ * and prevent the LLM from over-using structured output for casual messages.
+ */
 export function buildLessonChatSystemPrompt(params: LessonChatPromptParams): string {
-  const { lessonTitle, lessonSectionsJson, sourceChunks, persona, domainInstructions } = params
+  const { lessonTitle, persona, domainInstructions } = params
 
   const personaSection = persona
     ? `
-## Student Profile
+Adapt to this student's style:
 ${persona.tonePreference ? `- Tone: ${persona.tonePreference}` : ''}
 ${persona.depthPreference ? `- Depth: ${persona.depthPreference}` : ''}
-${persona.explanationStyle ? `- Explanation style: ${persona.explanationStyle}` : ''}
-${persona.interests?.length ? `- Interests: ${persona.interests.join(', ')}` : ''}
-
-Adapt your responses to match this student's learning style.
-Use their interest domains for analogies where natural.
+${persona.explanationStyle ? `- Style: ${persona.explanationStyle}` : ''}
+${persona.interests?.length ? `- Interests: ${persona.interests.join(', ')} (use for analogies when natural)` : ''}
 `.trim()
     : ''
+
+  return `You are a tutor helping a student reading "${lessonTitle}".
+
+Respond naturally. Most answers should be plain text with markdown.
+You have a renderSections tool — use it ONLY when a visual/structured layout genuinely helps (e.g. comparison tables, step-by-step processes, concept definitions the student asked to see differently).
+
+For casual messages (thanks, ok, got it, greetings) — reply in 1 sentence. No tool calls.
+For simple factual questions — reply in plain markdown. No tool calls.
+For "explain differently" or "compare X and Y" — use the tool.
+
+${domainInstructions ? `Domain: ${domainInstructions}` : ''}
+${personaSection}
+
+Ground answers in the lesson content provided. If asked about something not covered, say so.`.trim()
+}
+
+/**
+ * Build the CONTEXT message — lesson data + source chunks.
+ * This is sent as a separate user message before the conversation starts,
+ * allowing Anthropic to cache it across turns.
+ */
+export function buildLessonContextMessage(params: LessonChatPromptParams): string {
+  const { lessonTitle, lessonSectionsJson, sourceChunks } = params
 
   const chunksSection =
     sourceChunks.length > 0
       ? sourceChunks
           .map((c, i) => {
             const label = [
-              `Chunk ${i + 1}`,
+              `Source ${i + 1}`,
               c.sectionHeading ?? null,
               c.pageNumber ? `p.${c.pageNumber}` : null,
             ]
@@ -43,42 +67,12 @@ Use their interest domains for analogies where natural.
           .join('\n\n')
       : ''
 
-  return `You are an expert tutor helping a student who is reading the lesson "${lessonTitle}".
-The student may ask questions about concepts in the lesson, request alternative explanations, or want practice problems.
+  return `[LESSON CONTEXT — Reference material for answering questions. Do not repeat this back to the student.]
 
-## Core Rules
-- Ground your answers in the lesson content and source chunks below.
-- If asked about something not in the lesson or source material, say so clearly.
-- When a visual or structured explanation would be clearer than text, use the renderSections tool.
-- For simple factual questions, respond with plain text (markdown). Do NOT use renderSections for short answers.
+Lesson: ${lessonTitle}
 
-## When to Use renderSections
-Use the renderSections tool when:
-- The student asks you to "explain differently" or "show me another way"
-- You need to define a term, compare concepts, or walk through steps
-- A concept would benefit from a structured component (definition card, process flow, comparison table, etc.)
-
-Do NOT use renderSections for:
-- Simple yes/no answers or brief clarifications
-- Conversational responses ("Sure!", "Good question!")
-- When plain markdown is sufficient
-
-${LESSON_COMPONENT_INSTRUCTIONS}
-
-${domainInstructions ? `## Domain-Specific Teaching Rules\n${domainInstructions}\n` : ''}
-${personaSection}
-
-## Current Lesson
-Title: ${lessonTitle}
-
-### Lesson Sections (current content the student is reading)
+Sections:
 ${lessonSectionsJson}
 
-${chunksSection ? `### Source Material\n${chunksSection}` : ''}
-
-## Response Style
-- Be conversational and approachable, but academically rigorous.
-- Use markdown formatting for plain text responses.
-- Keep responses focused — do not pad with filler.
-- If unsure about something, say so explicitly.`.trim()
+${chunksSection ? `Source Material:\n${chunksSection}` : '(No source chunks available)'}`.trim()
 }

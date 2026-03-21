@@ -1,6 +1,6 @@
 import { createTRPCRouter } from '../trpc'
 import { analyticsRouter } from './analytics'
-import { audioRecapRouter } from './audioRecap'
+import { podcastRouter } from './podcast'
 import { chatRouter } from './chat'
 import { courseRouter } from './course'
 import { knowledgeGraphRouter } from './knowledgeGraph'
@@ -31,7 +31,7 @@ export const appRouter = createTRPCRouter({
   flashcard: flashcardRouter,
   mastery: masteryRouter,
   exam: examRouter,
-  audioRecap: audioRecapRouter,
+  podcast: podcastRouter,
   studyPlan: studyPlanRouter,
   notification: notificationRouter,
   course: courseRouter,
