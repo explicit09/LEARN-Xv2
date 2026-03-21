@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -13,7 +14,11 @@ import {
 } from '@learn-x/ui'
 import { trpc } from '@/lib/trpc/client'
 
-export function CreateWorkspaceModal() {
+interface CreateWorkspaceModalProps {
+  trigger?: ReactNode
+}
+
+export function CreateWorkspaceModal({ trigger }: CreateWorkspaceModalProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -40,9 +45,7 @@ export function CreateWorkspaceModal() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>New workspace</Button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{trigger ?? <Button>New workspace</Button>}</DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Create workspace</DialogTitle>
@@ -67,8 +70,7 @@ export function CreateWorkspaceModal() {
           </div>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="ws-desc" className="text-sm font-medium">
-              Description{' '}
-              <span className="font-normal text-muted-foreground">(optional)</span>
+              Description <span className="font-normal text-muted-foreground">(optional)</span>
             </label>
             <Input
               id="ws-desc"

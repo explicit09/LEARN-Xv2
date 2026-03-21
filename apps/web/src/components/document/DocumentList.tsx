@@ -42,11 +42,11 @@ export function DocumentList({ workspaceId }: DocumentListProps) {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="space-y-4">
         {[1, 2, 3, 4].map((i) => (
           <div
             key={i}
-            className="h-24 animate-pulse rounded-2xl bg-muted/50 border border-border"
+            className="h-24 animate-pulse rounded-2xl border border-border bg-muted/50"
           />
         ))}
       </div>
@@ -68,7 +68,7 @@ export function DocumentList({ workspaceId }: DocumentListProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-4">
       {documents.map((doc) => {
         const Icon = FILE_TYPE_ICON[doc.file_type as string] ?? FileText
         const statusKey = doc.status as keyof typeof STATUS_CONFIG
@@ -79,29 +79,41 @@ export function DocumentList({ workspaceId }: DocumentListProps) {
         return (
           <div
             key={doc.id as string}
-            className="flex items-start gap-4 rounded-2xl border border-border/50 bg-card/40 backdrop-blur-xl p-4 hover:bg-card/80 transition-all cursor-pointer group"
+            className="group flex items-start gap-4 rounded-2xl border border-border/50 bg-card/40 p-4 backdrop-blur-xl transition-all hover:border-primary/20 hover:bg-card/80"
           >
             <div className="shrink-0 w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-105 transition-transform border border-primary/20 shadow-inner">
               <Icon className="w-6 h-6" />
             </div>
 
             <div className="min-w-0 flex-1 pt-1">
-              <p className="truncate text-base font-bold text-foreground mb-1 pr-2">
-                {doc.title as string}
+              <div className="flex items-start justify-between gap-4">
+                <p className="truncate text-base font-bold text-foreground mb-1 pr-2">
+                  {doc.title as string}
+                </p>
+                <span className="hidden shrink-0 text-[11px] font-semibold text-muted-foreground sm:inline">
+                  {(doc.token_count as number | null)
+                    ? `${Math.round((doc.token_count as number) / 1000)}k tokens`
+                    : ''}
+                </span>
+              </div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Ready for concept extraction, lesson generation, and downstream study flows.
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span
-                  className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${statusConfig.color}`}
+                  className={`flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${statusConfig.color}`}
                 >
                   <StatusIcon className="w-3.5 h-3.5" />
                   {doc.status as string}
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  ·
-                </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                <span className="rounded-full border border-border/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   {doc.file_type as string}
                 </span>
+                {(doc.token_count as number | null) ? (
+                  <span className="rounded-full border border-border/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground sm:hidden">
+                    {Math.round((doc.token_count as number) / 1000)}k tokens
+                  </span>
+                ) : null}
               </div>
 
               {isFailed && (

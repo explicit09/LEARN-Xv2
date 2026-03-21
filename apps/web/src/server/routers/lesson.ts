@@ -7,6 +7,7 @@ import {
   getLessonSchema,
   markCompleteSchema,
   triggerGenerateLessonsSchema,
+  submitLessonRatingSchema,
 } from '@learn-x/validators'
 
 async function resolveUserId(supabase: SupabaseClient, authId: string): Promise<string> {
@@ -46,7 +47,7 @@ export const lessonRouter = createTRPCRouter({
     const { data, error } = await ctx.supabase
       .from('lessons')
       .select(
-        'id, title, order_index, summary, is_completed, completed_at, source_updated, created_at',
+        'id, title, order_index, summary, is_completed, completed_at, source_updated, syllabus_topic_id, created_at',
       )
       .eq('workspace_id', input.workspaceId)
       .order('order_index', { ascending: true })
@@ -85,6 +86,7 @@ export const lessonRouter = createTRPCRouter({
       isCompleted: data.is_completed as boolean,
       completedAt: data.completed_at as string | null,
       syllabusTopicId: data.syllabus_topic_id as string | null,
+      sourceMapping: data.source_mapping as unknown[],
       sourceUpdated: data.source_updated as boolean,
       createdAt: data.created_at as string,
       updatedAt: data.updated_at as string,
@@ -268,5 +270,30 @@ export const lessonRouter = createTRPCRouter({
       }
 
       return { jobId: job!.id as string, status: 'queued' as const }
+    }),
+
+  /**
+   * Submit a lesson rating (1-5 stars) with optional feedback text.
+   * Upserts: one rating per user per lesson.
+   */
+  submitRating: protectedProcedure
+    .input(submitLessonRatingSchema)
+    .mutation(async ({ ctx, input }) => {
+      const userId = await resolveUserId(ctx.supabase, ctx.user.id)
+      await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
+
+      const { error } = await ctx.supabase.from('lesson_feedback').upsert(
+        {
+          lesson_id: input.lessonId,
+          user_id: userId,
+          workspace_id: input.workspaceId,
+          rating: input.rating,
+          feedback_text: input.feedbackText ?? null,
+        },
+        { onConflict: 'lesson_id,user_id' },
+      )
+
+      if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+      return { success: true }
     }),
 })

@@ -1,7 +1,9 @@
 import { streamText, embed } from 'ai'
+import { z } from 'zod'
 import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { anthropic, openai, MODEL_ROUTES } from '@/lib/ai'
+import { lessonSectionZ } from '@/lib/ai/schemas/lesson-section'
 import {
   buildFullContextSystemBlocks,
   buildRagSystemBlocks,
@@ -18,10 +20,27 @@ export async function POST(req: NextRequest) {
     // Extract the last user message as the current turn
     const { sessionId, messages: aiMessages } = body as {
       sessionId: string
-      messages: { role: string; content: string }[]
+      messages: {
+        role: string
+        content?: string
+        parts?: { type: string; text?: string }[]
+      }[]
     }
+
+    // Extract text from v6 parts format or legacy content field
+    function getMessageText(m: (typeof aiMessages)[number]): string {
+      if (m.parts?.length) {
+        return m.parts
+          .filter((p) => p.type === 'text' && p.text)
+          .map((p) => p.text)
+          .join('')
+      }
+      return m.content ?? ''
+    }
+
     const userMessages = (aiMessages ?? []).filter((m) => m.role === 'user')
-    const message = userMessages[userMessages.length - 1]?.content ?? ''
+    const message =
+      userMessages.length > 0 ? getMessageText(userMessages[userMessages.length - 1]!) : ''
 
     if (!sessionId || !message?.trim()) {
       return NextResponse.json({ error: 'sessionId and message are required' }, { status: 400 })
@@ -61,7 +80,7 @@ export async function POST(req: NextRequest) {
     if (!workspace) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     // Use the history from AI SDK payload (excludes the current message, which is appended below)
-    const history = (aiMessages ?? []).slice(0, -1) as { role: string; content: string }[]
+    const history = (aiMessages ?? []).slice(0, -1)
 
     // Load persona (best-effort)
     const { data: personaData } = await supabase
@@ -141,11 +160,11 @@ export async function POST(req: NextRequest) {
       })
 
       const { data: searchResults } = await supabase.rpc('hybrid_search', {
-        p_workspace_id: workspace.id,
-        p_query_embedding: JSON.stringify(queryEmbedding),
-        p_query_text: message,
-        p_match_count: 8,
-        p_vector_weight: 0.7,
+        workspace_id_filter: workspace.id,
+        query_embedding: JSON.stringify(queryEmbedding),
+        query_text: message,
+        match_count: 8,
+        rrf_k: 60,
       })
 
       const retrieved = (searchResults ?? []) as {
@@ -177,10 +196,17 @@ export async function POST(req: NextRequest) {
     // Build messages array
     type MessageRole = 'user' | 'assistant'
     const messages: { role: MessageRole; content: string }[] = [
-      ...(contextBlock ? [{ role: 'user' as const, content: contextBlock }] : []),
+      // Context as prefilled exchange (cacheable by Anthropic)
+      ...(contextBlock
+        ? [
+            { role: 'user' as const, content: contextBlock },
+            { role: 'assistant' as const, content: 'I have the source material. How can I help?' },
+          ]
+        : []),
       ...history
         .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({ role: m.role as MessageRole, content: m.content })),
+        .map((m) => ({ role: m.role as MessageRole, content: getMessageText(m) }))
+        .filter((m) => m.content.length > 0),
       { role: 'user' as const, content: message },
     ]
 
@@ -188,6 +214,17 @@ export async function POST(req: NextRequest) {
       model: anthropic(modelId as Parameters<typeof anthropic>[0]),
       system: systemContent,
       messages,
+      tools: {
+        renderSections: {
+          description:
+            'Render structured lesson sections (concept definitions, process flows, comparison tables, analogy cards, etc.) when a visual/structured explanation is better than plain text. Use for "explain differently", comparisons, step-by-step processes, or definitions.',
+          inputSchema: z.object({
+            sections: z
+              .array(lessonSectionZ)
+              .describe('Array of lesson sections to render visually.'),
+          }),
+        },
+      },
       onFinish: async ({ text, usage }) => {
         const latencyMs = Date.now() - startTime
 
@@ -203,11 +240,21 @@ export async function POST(req: NextRequest) {
         if (citedChunkIds.length > 0) insertMsg['cited_chunk_ids'] = citedChunkIds
         await supabase.from('chat_messages').insert(insertMsg)
 
-        // Update session updated_at
-        await supabase
+        // Update session — set title from first message if not set yet
+        const { data: currentSession } = await supabase
           .from('chat_sessions')
-          .update({ updated_at: new Date().toISOString() })
+          .select('title')
           .eq('id', sessionId)
+          .single()
+
+        const updateData: Record<string, unknown> = {
+          updated_at: new Date().toISOString(),
+        }
+        if (!currentSession?.title || currentSession.title === 'New conversation') {
+          // Use first user message as title, truncated
+          updateData.title = message.slice(0, 60) + (message.length > 60 ? '...' : '')
+        }
+        await supabase.from('chat_sessions').update(updateData).eq('id', sessionId)
 
         // Track ai_request (Rule 6 — every LLM call tracked)
         await supabase.from('ai_requests').insert({

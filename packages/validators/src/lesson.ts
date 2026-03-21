@@ -154,3 +154,10 @@ export const markCompleteSchema = z.object({
 export const triggerGenerateLessonsSchema = z.object({
   workspaceId: z.string().uuid(),
 })
+
+export const submitLessonRatingSchema = z.object({
+  lessonId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+  rating: z.number().int().min(1).max(5),
+  feedbackText: z.string().max(500).optional(),
+})

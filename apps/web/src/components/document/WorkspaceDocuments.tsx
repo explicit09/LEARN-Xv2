@@ -18,32 +18,42 @@ export function WorkspaceDocuments({ workspaceId }: WorkspaceDocumentsProps) {
   }, [utils, workspaceId])
 
   return (
-    <div className="grid lg:grid-cols-3 gap-8 p-4">
-      {/* Upload Column */}
-      <section className="col-span-1 flex flex-col gap-4">
-        <div className="flex items-center gap-2 mb-2">
-           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-             <HardDriveDownload className="w-4 h-4" />
-           </div>
-           <h2 className="text-lg font-bold">Add Materials</h2>
+    <div className="grid gap-6 p-4 lg:grid-cols-2 lg:p-6">
+      <section className="rounded-[28px] border border-border/60 bg-background/80 p-5 shadow-sm">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <HardDriveDownload className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+              Ingestion
+            </p>
+            <h2 className="text-lg font-bold">Add Materials</h2>
+          </div>
         </div>
-        <div className="glass-card rounded-2xl p-6 border border-border/50 shadow-sm relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-          <UploadDropzone workspaceId={workspaceId} onUploadComplete={handleUploadComplete} />
-        </div>
+        <p className="mb-4 text-sm leading-6 text-muted-foreground">
+          Upload lectures, notes, readings, or paste a link. This is the source layer the workspace
+          builds from.
+        </p>
+        <UploadDropzone workspaceId={workspaceId} onUploadComplete={handleUploadComplete} />
       </section>
 
-      {/* Docs Column */}
-      <section className="col-span-1 lg:col-span-2 flex flex-col gap-4">
-        <div className="flex items-center gap-2 mb-2">
-           <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-             <FolderOpen className="w-4 h-4" />
-           </div>
-           <h2 className="text-lg font-bold">Workspace Documents</h2>
+      <section className="min-w-0 rounded-[28px] border border-border/60 bg-card/50 p-5 shadow-sm lg:p-6">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">
+              <FolderOpen className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+                Documents
+              </p>
+              <h2 className="text-lg font-bold">Workspace Documents</h2>
+            </div>
+          </div>
         </div>
-        <div className="p-1">
-          <DocumentList workspaceId={workspaceId} />
-        </div>
+
+        <DocumentList workspaceId={workspaceId} />
       </section>
     </div>
   )

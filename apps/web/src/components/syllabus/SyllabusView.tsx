@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc/client'
-import { ChevronDown, ChevronUp, Map, Layers, Target } from 'lucide-react'
+import { ChevronDown, ChevronUp, Map, Layers, Target, BrainCircuit, ArrowRight } from 'lucide-react'
+import Link from 'next/link'
 
 interface SyllabusViewProps {
   workspaceId: string
@@ -12,6 +13,10 @@ interface SyllabusViewProps {
 export function SyllabusView({ workspaceId, hasDocuments }: SyllabusViewProps) {
   const { data: docs } = trpc.document.list.useQuery({ workspaceId })
   const hasProcessing = docs?.some((d) => ['uploading', 'processing'].includes(d.status as string))
+  const { data: concepts } = trpc.concept.list.useQuery(
+    { workspaceId },
+    { refetchInterval: hasProcessing ? 5000 : false },
+  )
 
   const { data: syllabus, isLoading } = trpc.syllabus.get.useQuery(
     { workspaceId },
@@ -135,6 +140,55 @@ export function SyllabusView({ workspaceId, hasDocuments }: SyllabusViewProps) {
           </div>
         )
       })}
+
+      <section className="overflow-hidden rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-border/50 px-6 py-5 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+              Concepts
+            </p>
+            <h3 className="mt-2 text-xl font-bold text-foreground">Concept reference</h3>
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">
+              A lightweight index of the concepts extracted from this workspace, kept below the
+              syllabus instead of as a full separate section.
+            </p>
+          </div>
+          {concepts && concepts.length > 0 ? (
+            <Link
+              href={`/workspace/${workspaceId}/graph`}
+              className="inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80"
+            >
+              Open Knowledge Graph
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          ) : null}
+        </div>
+
+        {!concepts?.length ? (
+          <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
+              <BrainCircuit className="h-6 w-6" />
+            </div>
+            <p className="text-base font-semibold text-foreground">No concepts extracted yet</p>
+            <p className="mt-2 max-w-md text-sm text-muted-foreground">
+              Concepts will appear here once document processing finishes and the workspace
+              knowledge map is ready.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2 px-6 py-5">
+            {concepts.map((concept) => (
+              <div
+                key={concept.id as string}
+                className="inline-flex max-w-full items-center gap-2 rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-sm text-foreground"
+              >
+                <BrainCircuit className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="truncate">{concept.name as string}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
