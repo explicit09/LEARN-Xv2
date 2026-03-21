@@ -261,28 +261,40 @@ export const examRouter = createTRPCRouter({
     const questionsMap = new Map((questions ?? []).map((q) => [q.id, q]))
 
     let correct = 0
-    const total = questions?.length ?? 0
+    let graded = 0
     const reviewed = []
 
     for (const response of responses ?? []) {
       const question = questionsMap.get(response.question_id)
       if (!question) continue
 
-      const autoGradable =
-        question.question_type === 'mcq' || question.question_type === 'true_false'
-      const isCorrect = autoGradable
-        ? response.user_answer?.trim().toLowerCase() ===
-          question.correct_answer?.trim().toLowerCase()
-        : null
+      const userNorm = (response.user_answer ?? '').trim().toLowerCase()
+      const correctNorm = (question.correct_answer ?? '').trim().toLowerCase()
 
-      if (isCorrect) correct++
+      let isCorrect: boolean | null = null
+      if (question.question_type === 'mcq' || question.question_type === 'true_false') {
+        isCorrect = userNorm === correctNorm
+      } else if (
+        question.question_type === 'short_answer' ||
+        question.question_type === 'fill_blank'
+      ) {
+        isCorrect =
+          userNorm === correctNorm ||
+          correctNorm.includes(userNorm) ||
+          userNorm.includes(correctNorm)
+      }
+
+      if (isCorrect !== null) {
+        graded++
+        if (isCorrect) correct++
+      }
 
       await ctx.supabase
         .from('exam_responses')
         .update({
           is_correct: isCorrect,
           feedback: question.explanation ?? null,
-          points_earned: isCorrect ? 1 : 0,
+          points_earned: isCorrect ? 1 : isCorrect === false ? 0 : null,
         })
         .eq('id', response.id)
 
@@ -295,7 +307,7 @@ export const examRouter = createTRPCRouter({
       })
     }
 
-    const score = total > 0 ? correct / total : 0
+    const score = graded > 0 ? correct / graded : 0
 
     const startedAtRow = await ctx.supabase
       .from('exam_attempts')
@@ -341,7 +353,7 @@ export const examRouter = createTRPCRouter({
       }
     }
 
-    return { score, total, correct, timeSpentSeconds, reviewed }
+    return { score, total: graded, correct, timeSpentSeconds, reviewed }
   }),
 
   /**

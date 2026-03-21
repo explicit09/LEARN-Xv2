@@ -44,10 +44,10 @@ export const quizRouter = createTRPCRouter({
       await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
 
       try {
-        const { tasks } = await import('@trigger.dev/sdk/v3')
-        await tasks.trigger('generate-quiz', { workspaceId: input.workspaceId })
-      } catch {
-        // Trigger.dev not available in all environments — best effort
+        const { generateQuiz } = await import('@/../../../trigger/src/jobs/generate-quiz')
+        await generateQuiz.trigger({ workspaceId: input.workspaceId })
+      } catch (err) {
+        console.error('[quiz.generate] Trigger failed:', err)
       }
 
       return { started: true }
@@ -153,10 +153,22 @@ export const quizRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Question not found' })
       }
 
-      const isCorrect =
-        question.question_type === 'multiple_choice' || question.question_type === 'true_false'
-          ? input.userAnswer.trim().toLowerCase() === question.correct_answer.trim().toLowerCase()
-          : null
+      const userNorm = input.userAnswer.trim().toLowerCase()
+      const correctNorm = question.correct_answer.trim().toLowerCase()
+
+      let isCorrect: boolean | null = null
+      if (question.question_type === 'multiple_choice' || question.question_type === 'true_false') {
+        isCorrect = userNorm === correctNorm
+      } else if (
+        question.question_type === 'short_answer' ||
+        question.question_type === 'fill_blank'
+      ) {
+        // Basic fuzzy match: exact match or contained-in for short answers
+        isCorrect =
+          userNorm === correctNorm ||
+          correctNorm.includes(userNorm) ||
+          userNorm.includes(correctNorm)
+      }
 
       // Generate feedback based on correctness
       const feedback =
@@ -226,8 +238,10 @@ export const quizRouter = createTRPCRouter({
         .select('is_correct')
         .eq('attempt_id', input.attemptId)
 
-      const total = responses?.length ?? 0
-      const correct = responses?.filter((r) => r.is_correct).length ?? 0
+      // Only count questions that were actually graded (is_correct !== null)
+      const graded = (responses ?? []).filter((r) => r.is_correct !== null)
+      const total = graded.length
+      const correct = graded.filter((r) => r.is_correct).length
       const score = total > 0 ? correct / total : 0
 
       const { data: updated, error } = await ctx.supabase
