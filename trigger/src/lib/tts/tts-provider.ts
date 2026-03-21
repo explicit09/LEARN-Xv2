@@ -1,5 +1,3 @@
-import { logger } from '@trigger.dev/sdk/v3'
-
 /** Result from a TTS synthesis call. */
 export interface TTSResult {
   buffer: ArrayBuffer

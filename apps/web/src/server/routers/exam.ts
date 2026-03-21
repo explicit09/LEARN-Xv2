@@ -262,7 +262,8 @@ export const examRouter = createTRPCRouter({
 
     let correct = 0
     let graded = 0
-    const reviewed = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const reviewed: any[] = []
 
     for (const response of responses ?? []) {
       const question = questionsMap.get(response.question_id)
