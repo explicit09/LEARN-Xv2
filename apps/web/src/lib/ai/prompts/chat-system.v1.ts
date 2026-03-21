@@ -70,15 +70,22 @@ export function buildFullContextSystemBlocks(params: {
 
 export function buildRagSystemBlocks(params: {
   workspaceName: string
-  retrievedChunks: { content: string; sectionHeading?: string }[]
+  retrievedChunks: { content: string; sectionHeading?: string; pageNumber?: number }[]
   persona?: PersonaContext
 }) {
   const { workspaceName, retrievedChunks, persona } = params
 
   const chunksText = retrievedChunks
-    .map(
-      (c, i) => `[Chunk ${i + 1}${c.sectionHeading ? ` — ${c.sectionHeading}` : ''}]\n${c.content}`,
-    )
+    .map((c, i) => {
+      const label = [
+        `Chunk ${i + 1}`,
+        c.sectionHeading ? c.sectionHeading : null,
+        c.pageNumber ? `p.${c.pageNumber}` : null,
+      ]
+        .filter(Boolean)
+        .join(' — ')
+      return `[${label}]\n${c.content}`
+    })
     .join('\n\n')
 
   return {

@@ -5,10 +5,8 @@ import { generateText } from 'ai'
 
 import { openaiProvider, MODEL_ROUTES } from '../lib/ai'
 import { chunkText } from '../lib/chunker'
-import { classifyDocumentRole } from '../lib/classify-document-role'
 import { detectSubject } from '../lib/subject-detection'
 import { extractText } from '../lib/text-extraction'
-import { extractFromUrl } from '../lib/url-extraction'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -35,27 +33,28 @@ async function setProgress(supabase: Supabase, jobId: string, progress: number) 
   await supabase.from('jobs').update({ progress, status: 'running' }).eq('id', jobId)
 }
 
-interface AiRequestFields {
-  workspaceId: string
-  model: string
-  provider: string
-  inputTokens: number
-  outputTokens: number
-  costUsd: number
-  latencyMs: number
-  taskName: string
-}
-
-async function recordAiRequest(supabase: Supabase, f: AiRequestFields) {
+async function recordAiRequest(
+  supabase: Supabase,
+  fields: {
+    workspaceId: string
+    model: string
+    provider: string
+    inputTokens: number
+    outputTokens: number
+    costUsd: number
+    latencyMs: number
+    taskName: string
+  },
+) {
   await supabase.from('ai_requests').insert({
-    workspace_id: f.workspaceId,
-    model: f.model,
-    provider: f.provider,
-    prompt_tokens: f.inputTokens,
-    completion_tokens: f.outputTokens,
-    cost_usd: f.costUsd,
-    latency_ms: f.latencyMs,
-    task_name: f.taskName,
+    workspace_id: fields.workspaceId,
+    model: fields.model,
+    provider: fields.provider,
+    prompt_tokens: fields.inputTokens,
+    completion_tokens: fields.outputTokens,
+    cost_usd: fields.costUsd,
+    latency_ms: fields.latencyMs,
+    task_name: fields.taskName,
   })
 }
 
@@ -81,46 +80,17 @@ export const processDocument = task({
 
       logger.info('Processing document', { documentId, title: doc.title as string })
 
-      const metadata = (doc.metadata ?? {}) as { source_url?: string; is_youtube?: boolean }
-      const isUrlSource = Boolean(metadata.source_url)
-      const isYouTube = Boolean(metadata.is_youtube)
-      let rawText: string
-
-      if (isUrlSource) {
-        // ── URL-sourced document ──────────────────────────────────
-        await setProgress(supabase, jobId, 14)
-        rawText = await extractFromUrl(metadata.source_url!, isYouTube)
-        // Update title from page content if it was generic
-        if (doc.title === 'YouTube Video' || doc.title === new URL(metadata.source_url!).hostname) {
-          const titleMatch = rawText.slice(0, 500).match(/^#\s+(.+)$/m)
-          if (titleMatch?.[1]) {
-            await supabase
-              .from('documents')
-              .update({ title: titleMatch[1].slice(0, 200) })
-              .eq('id', documentId)
-          }
-        }
-      } else {
-        // ── File-based document ───────────────────────────────────
-        const { data: fileBlob, error: downloadError } = await supabase.storage
-          .from('documents')
-          .download(doc.file_url as string)
-        if (downloadError || !fileBlob) throw new Error('Failed to download document from storage')
-        await setProgress(supabase, jobId, 14)
-        rawText = await extractText(fileBlob, doc.file_type as string)
-      }
-
-      // ── Classify document role ──────────────────────────────────
-      const roleResult = await classifyDocumentRole(rawText, doc.title as string, null)
-      await supabase
+      // ── Download ────────────────────────────────────────────────
+      const { data: fileBlob, error: downloadError } = await supabase.storage
         .from('documents')
-        .update({ role: roleResult.role, role_confidence: roleResult.confidence })
-        .eq('id', documentId)
-      logger.info('Document role classified', {
-        documentId,
-        role: roleResult.role,
-        confidence: roleResult.confidence,
-      })
+        .download(doc.file_url as string)
+      if (downloadError || !fileBlob) throw new Error('Failed to download document from storage')
+
+      await setProgress(supabase, jobId, 14)
+
+      // ── Parse ───────────────────────────────────────────────────
+      const extraction = await extractText(fileBlob, doc.file_type as string)
+      const rawText = extraction.text
 
       // ── Chunk + Detect Subject (parallel) ──────────────────────
       const [textChunks, subjectMeta] = await Promise.all([
@@ -174,7 +144,7 @@ export const processDocument = task({
       await setProgress(supabase, jobId, 70)
 
       // ── Store ───────────────────────────────────────────────────
-      await storeChunksAndEmbeddings(supabase, doc, enriched, embeddings)
+      await storeChunksAndEmbeddings(supabase, doc, enriched, embeddings, extraction.pages)
 
       await setProgress(supabase, jobId, 85)
 
@@ -187,49 +157,12 @@ export const processDocument = task({
 
       await supabase.from('jobs').update({ status: 'completed', progress: 100 }).eq('id', jobId)
 
-      // ── Trigger downstream pipeline ────────────────────────────
-      const batchId = doc.upload_batch_id as string | null
-      let shouldTriggerPipeline = true
-
-      // Batch coordination: defer until all batch members are done
-      if (batchId) {
-        const { count } = await supabase
-          .from('documents')
-          .select('id', { count: 'exact', head: true })
-          .eq('upload_batch_id', batchId)
-          .in('status', ['uploading', 'processing'])
-        shouldTriggerPipeline = (count ?? 0) === 0
-        if (!shouldTriggerPipeline) {
-          logger.info('Batch not complete, deferring pipeline', { batchId, remaining: count })
-        }
-      }
-
-      if (shouldTriggerPipeline) {
-        try {
-          const { extractConcepts } = await import('./extract-concepts')
-          await extractConcepts.trigger({ workspaceId: doc.workspace_id as string })
-        } catch {
-          // No TRIGGER_SECRET_KEY in dev, skip
-        }
-
-        // If workspace already has a syllabus, trigger incremental update
-        if (roleResult.role !== 'reference') {
-          try {
-            const { data: existingSyllabus } = await supabase
-              .from('syllabuses')
-              .select('id')
-              .eq('workspace_id', doc.workspace_id)
-              .eq('status', 'active')
-              .limit(1)
-              .maybeSingle()
-            if (existingSyllabus) {
-              const { updateSyllabus } = await import('./update-syllabus')
-              await updateSyllabus.trigger({ workspaceId: doc.workspace_id as string, documentId })
-            }
-          } catch {
-            // best-effort
-          }
-        }
+      // Best-effort: trigger concept extraction for this workspace
+      try {
+        const { extractConcepts } = await import('./extract-concepts')
+        await extractConcepts.trigger({ workspaceId: doc.workspace_id as string })
+      } catch {
+        // No TRIGGER_SECRET_KEY in dev, skip
       }
 
       logger.info('Document processed', { documentId, chunks: textChunks.length, totalTokens })
@@ -247,6 +180,12 @@ export const processDocument = task({
   },
 })
 
+// ── Text Extraction ──────────────────────────────────────────────────────────
+
+// Text extraction moved to ../lib/text-extraction.ts
+
+// ── Enrichment ────────────────────────────────────────────────────────────────
+
 interface EnrichedChunk {
   content: string
   enrichedContent: string
@@ -256,7 +195,11 @@ interface EnrichedChunk {
 
 const ENRICHMENT_CONCURRENCY = 10
 
-// Contextual Retrieval enrichment — parallelized (GPT-5.4 nano, cheap + fast).
+/**
+ * Contextual Retrieval enrichment — parallelized.
+ * Runs ENRICHMENT_CONCURRENCY calls at once using GPT-5.4 nano (cheap, fast).
+ * Each call sends a trimmed document context + chunk, gets 1-2 sentence summary.
+ */
 async function enrichChunksWithContext(
   supabase: Supabase,
   chunks: { content: string; chunkIndex: number; tokenCount: number }[],
@@ -351,13 +294,57 @@ async function embedChunks(
   return embeddings
 }
 
-// Store chunks + embeddings atomically via RPC (falls back to sequential inserts).
+// ── Page boundary mapping ────────────────────────────────────────────────────
+
+/**
+ * Map each chunk to its source page (1-indexed).
+ * Uses character offset matching: concatenate pages with the same separator
+ * used during extraction, then find where each chunk's content starts.
+ */
+function buildPageMap(
+  chunks: { content: string; chunkIndex: number }[],
+  pages: string[],
+): Map<number, number> {
+  // Build cumulative character offsets for each page boundary
+  const pageOffsets: { page: number; start: number; end: number }[] = []
+  let offset = 0
+  for (let i = 0; i < pages.length; i++) {
+    const len = pages[i]!.length
+    pageOffsets.push({ page: i + 1, start: offset, end: offset + len })
+    offset += len + 2 // +2 for '\n\n' separator between pages
+  }
+
+  const fullText = pages.join('\n\n')
+  const result = new Map<number, number>()
+
+  for (const chunk of chunks) {
+    // Find where this chunk's content first appears in the full text
+    const pos = fullText.indexOf(chunk.content.slice(0, 80))
+    if (pos === -1) continue
+    // Find which page this position falls in
+    for (const p of pageOffsets) {
+      if (pos >= p.start && pos < p.end) {
+        result.set(chunk.chunkIndex, p.page)
+        break
+      }
+    }
+  }
+
+  return result
+}
+
+// ── Storage ───────────────────────────────────────────────────────────────────
+
 async function storeChunksAndEmbeddings(
   supabase: Supabase,
   doc: { id: string; workspace_id: string },
   chunks: EnrichedChunk[],
   embeddings: number[][],
+  pages: string[] | null,
 ) {
+  // Build a page lookup: for each chunk, find which page it belongs to
+  const pageMap = pages ? buildPageMap(chunks, pages) : null
+
   const chunkRows = chunks.map((c) => ({
     document_id: doc.id,
     workspace_id: doc.workspace_id,
@@ -365,23 +352,8 @@ async function storeChunksAndEmbeddings(
     enriched_content: c.enrichedContent || null,
     chunk_index: c.chunkIndex,
     token_count: c.tokenCount,
+    page_number: pageMap ? (pageMap.get(c.chunkIndex) ?? null) : null,
   }))
-
-  const embeddingVectors = embeddings.map((e) => `[${e.join(',')}]`)
-
-  // Try atomic RPC first
-  const { error: rpcError } = await supabase.rpc('insert_chunks_and_embeddings', {
-    p_chunks: chunkRows,
-    p_embeddings: embeddingVectors,
-    p_model_version: 'text-embedding-3-large',
-  })
-
-  if (!rpcError) return
-
-  // Fallback: sequential inserts (e.g. RPC not deployed yet)
-  logger.warn('Atomic RPC unavailable, falling back to sequential inserts', {
-    error: rpcError.message,
-  })
 
   const { data: inserted, error: chunkError } = await supabase
     .from('chunks')
@@ -391,7 +363,7 @@ async function storeChunksAndEmbeddings(
 
   const embeddingRows = inserted.map((c, i) => ({
     chunk_id: c.id,
-    embedding: embeddingVectors[i],
+    embedding: `[${(embeddings[i] ?? []).join(',')}]`,
     model_version: 'text-embedding-3-large',
   }))
 

@@ -5,7 +5,7 @@ export const LESSON_CHAT_PROMPT_VERSION = 'lesson-chat.v2'
 export interface LessonChatPromptParams {
   lessonTitle: string
   lessonSectionsJson: string
-  sourceChunks: { content: string; sectionHeading?: string | undefined }[]
+  sourceChunks: { content: string; sectionHeading?: string; pageNumber?: number }[]
   persona?: PersonaContext | undefined
   domainInstructions?: string | undefined
 }
@@ -54,10 +54,16 @@ export function buildLessonContextMessage(params: LessonChatPromptParams): strin
   const chunksSection =
     sourceChunks.length > 0
       ? sourceChunks
-          .map(
-            (c, i) =>
-              `[Source ${i + 1}${c.sectionHeading ? ` — ${c.sectionHeading}` : ''}]\n${c.content}`,
-          )
+          .map((c, i) => {
+            const label = [
+              `Source ${i + 1}`,
+              c.sectionHeading ?? null,
+              c.pageNumber ? `p.${c.pageNumber}` : null,
+            ]
+              .filter(Boolean)
+              .join(' — ')
+            return `[${label}]\n${c.content}`
+          })
           .join('\n\n')
       : ''
 

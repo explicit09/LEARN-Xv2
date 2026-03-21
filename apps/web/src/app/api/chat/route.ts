@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
 
       const { data: chunkRows } = await supabase
         .from('chunks')
-        .select('content')
+        .select('content, enriched_content')
         .eq('workspace_id', workspace.id)
         .order('chunk_index', { ascending: true })
         .limit(2000)
@@ -139,7 +139,9 @@ export async function POST(req: NextRequest) {
       const documentTexts = [
         {
           fileName: workspace.name as string,
-          content: ((chunkRows ?? []) as { content: string }[]).map((c) => c.content).join('\n\n'),
+          content: ((chunkRows ?? []) as { content: string; enriched_content: string | null }[])
+            .map((c) => c.enriched_content || c.content)
+            .join('\n\n'),
         },
       ]
 
@@ -170,6 +172,8 @@ export async function POST(req: NextRequest) {
       const retrieved = (searchResults ?? []) as {
         chunk_id: string
         content: string
+        enriched_content: string | null
+        page_number: number | null
         section_heading: string | null
       }[]
       citedChunkIds = retrieved.map((r) => r.chunk_id)
@@ -177,8 +181,9 @@ export async function POST(req: NextRequest) {
       const { systemInstructions, retrievedContext } = buildRagSystemBlocks({
         workspaceName: workspace.name as string,
         retrievedChunks: retrieved.map((r) => ({
-          content: r.content,
+          content: r.enriched_content || r.content,
           ...(r.section_heading ? { sectionHeading: r.section_heading } : {}),
+          ...(r.page_number ? { pageNumber: r.page_number } : {}),
         })),
         ...(persona ? { persona } : {}),
       })

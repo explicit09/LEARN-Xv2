@@ -7,7 +7,6 @@ import { getDomainConfig } from '../lib/prompts/domains'
 import {
   embedTexts,
   generateLessonWithRetry,
-  selectAnalogyDomain,
   buildConceptQuery,
   buildSourceMapping,
   BATCH_SIZE,
@@ -15,6 +14,7 @@ import {
   type RawChunk,
   type TopicWithContext,
 } from '../lib/lesson-generation-helpers'
+import { selectInterestsForLesson, primaryAnalogyDomain } from '../lib/interest-rotation'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -34,7 +34,6 @@ export const generateLessons = task({
   id: 'generate-lessons',
   maxDuration: 900,
   retry: { maxAttempts: 2 },
-
   run: async (payload: GenerateLessonsPayload) => {
     const { workspaceId, userId } = payload
     const supabase = makeSupabase()
@@ -206,19 +205,24 @@ export const generateLessons = task({
       .maybeSingle()
 
     const expPrefs = (persona?.explanation_preferences as Record<string, string> | null) ?? {}
-    const personaBase =
-      persona != null
-        ? {
-            interests: (persona.interests as string[]) ?? [],
-            explanationStyle: expPrefs['explanationStyle'] ?? undefined,
-            depthPreference: expPrefs['depthPreference'] ?? undefined,
-            tonePreference:
-              (persona.tone_preference as string) ?? expPrefs['tonePreference'] ?? undefined,
-            motivationalStyle: (persona.motivational_style as string) ?? undefined,
-            difficultyPreference: (persona.difficulty_preference as string) ?? undefined,
-            framingStrength: 'moderate' as const,
-          }
-        : null
+    const allInterests = (persona?.interests as string[]) ?? []
+
+    /** Build per-lesson persona with rotated interests. */
+    function personaForLesson(lessonIndex: number) {
+      if (!persona) return undefined
+      const selected = selectInterestsForLesson(allInterests, lessonIndex, userId)
+      return {
+        interests: selected,
+        analogyDomain: primaryAnalogyDomain(selected),
+        ...(expPrefs['explanationStyle'] ? { explanationStyle: expPrefs['explanationStyle'] } : {}),
+        ...(expPrefs['depthPreference'] ? { depthPreference: expPrefs['depthPreference'] } : {}),
+        tonePreference:
+          (persona.tone_preference as string) ?? expPrefs['tonePreference'] ?? undefined,
+        motivationalStyle: (persona.motivational_style as string) ?? undefined,
+        difficultyPreference: (persona.difficulty_preference as string) ?? undefined,
+        framingStrength: 'moderate' as const,
+      } as Parameters<typeof buildLessonPrompt>[0]['persona']
+    }
 
     // Fetch existing lesson takeaways for spaced retrieval
     const { data: existingLessonTakeaways } = await supabase
@@ -270,15 +274,7 @@ export const generateLessons = task({
         .filter((t) => t.globalIndex < topic.globalIndex)
         .flatMap((t) => t.conceptNames)
 
-      // Deterministic interest rotation for analogies
-      const analogyDomain = personaBase?.interests
-        ? selectAnalogyDomain(personaBase.interests, userId, topic.topicId, topic.globalIndex)
-        : undefined
-      const personaContext = personaBase
-        ? { ...personaBase, analogyDomain: analogyDomain ?? null }
-        : undefined
-
-      // Phase 4c: spaced retrieval from 2-3 positions back
+      // Spaced retrieval from 2-3 positions back
       let spacedRetrievalItems: string[] | undefined
       if (topic.globalIndex >= 3) {
         const lookbackTopics = topicsWithContext.filter(
@@ -294,6 +290,8 @@ export const generateLessons = task({
       const prevTopic = topicsWithContext.find((t) => t.globalIndex === topic.globalIndex - 1)
       const nextTopic = topicsWithContext.find((t) => t.globalIndex === topic.globalIndex + 1)
 
+      const lessonPersona = personaForLesson(topicIdx)
+
       const prompt = buildLessonPrompt({
         topicTitle: topic.topicTitle,
         conceptNames: topic.conceptNames,
@@ -306,7 +304,7 @@ export const generateLessons = task({
         prerequisites: priorConceptNames,
         retrievedChunks,
         domainInstructions: domainConfig.instructions,
-        ...(personaContext ? { persona: personaContext } : {}),
+        ...(lessonPersona ? { persona: lessonPersona } : {}),
         spacedRetrievalItems,
       })
 
