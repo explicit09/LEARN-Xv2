@@ -3,8 +3,9 @@ import { createClient } from '@supabase/supabase-js'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
-import { anthropic, MODEL_ROUTES } from '../lib/ai'
+import { anthropic, MODEL_ROUTES, calculateCost } from '../lib/ai'
 import { deduplicateConcepts, normalizeConceptName } from '../lib/concept-utils'
+import { selectChunksWithinBudget } from '../lib/chunk-budget'
 import { buildExtractConceptsPrompt, PROMPT_VERSION } from '../lib/prompts/extract-concepts.v1'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -39,6 +40,7 @@ const extractionSchema = z.object({
 
 export const extractConcepts = task({
   id: 'extract-concepts',
+  maxDuration: 900,
   retry: { maxAttempts: 2 },
 
   run: async (payload: ExtractConceptsPayload) => {
@@ -73,9 +75,10 @@ export const extractConcepts = task({
       return { concepts: 0 }
     }
 
-    const chunkTexts = chunks.map((c) =>
-      ((c.enriched_content as string | null) ?? (c.content as string)).slice(0, 500),
+    const fullTexts = chunks.map(
+      (c) => (c.enriched_content as string | null) ?? (c.content as string),
     )
+    const chunkTexts = selectChunksWithinBudget(fullTexts, 120_000)
 
     // ── 3. Call LLM via Vercel AI SDK ─────────────────────────
     const MODEL = MODEL_ROUTES.CONCEPT_EXTRACTION
@@ -112,7 +115,7 @@ export const extractConcepts = task({
       provider: 'anthropic',
       prompt_tokens: usage.inputTokens,
       completion_tokens: usage.outputTokens,
-      cost_usd: (usage.inputTokens ?? 0) * 0.000003 + (usage.outputTokens ?? 0) * 0.000015,
+      cost_usd: calculateCost(MODEL, usage.inputTokens, usage.outputTokens),
       latency_ms: Date.now() - start,
       task_name: 'extract-concepts',
       prompt_version: PROMPT_VERSION,
@@ -191,12 +194,14 @@ export const extractConcepts = task({
         .upsert(chunkConceptRows, { onConflict: 'chunk_id,concept_id', ignoreDuplicates: true })
     }
 
-    // ── 9. Trigger generate-syllabus (best-effort) ───────────
+    // ── 9. Trigger generate-syllabus ──────────────────────────
+    // Use triggerAndWait to eliminate queue scheduling gap (~90s).
+    // Syllabus job then chains to generate-lessons in the same way.
     try {
       const { generateSyllabus } = await import('./generate-syllabus')
-      await generateSyllabus.trigger({ workspaceId })
-    } catch {
-      // No TRIGGER_SECRET_KEY in dev, skip
+      await generateSyllabus.triggerAndWait({ workspaceId })
+    } catch (err) {
+      logger.error('generate-syllabus failed', { error: String(err) })
     }
 
     logger.info('Concepts extracted', { workspaceId, count: deduplicated.length })

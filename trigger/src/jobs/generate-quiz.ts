@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
-import { openaiProvider } from '../lib/ai'
+import { getProvider, MODEL_ROUTES } from '../lib/ai'
 import {
   buildQuizGenerationPrompt,
   QUIZ_GENERATION_PROMPT_VERSION,
@@ -126,7 +126,7 @@ export const generateQuiz = task({
       })
 
       const { output, usage } = await generateText({
-        model: openaiProvider('gpt-4o-mini'),
+        model: getProvider(MODEL_ROUTES.QUIZ_GENERATION)(MODEL_ROUTES.QUIZ_GENERATION),
         output: Output.object({ schema: quizOutputSchema }),
         prompt,
       })
@@ -136,7 +136,7 @@ export const generateQuiz = task({
       // Track ai_request
       await supabase.from('ai_requests').insert({
         workspace_id: workspaceId,
-        model: 'gpt-4o-mini',
+        model: MODEL_ROUTES.QUIZ_GENERATION,
         prompt_tokens: usage.inputTokens ?? 0,
         completion_tokens: usage.outputTokens ?? 0,
         cost_usd: (usage.inputTokens ?? 0) * 0.00000015 + (usage.outputTokens ?? 0) * 0.0000006,

@@ -4,7 +4,7 @@ import { generateText, Output } from 'ai'
 import { z } from 'zod'
 import { randomBytes } from 'crypto'
 
-import { openaiProvider } from '../lib/ai'
+import { getProvider, MODEL_ROUTES } from '../lib/ai'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -165,7 +165,7 @@ export const generateExam = task({
       })
 
       const { output, usage } = await generateText({
-        model: openaiProvider('gpt-4o-mini'),
+        model: getProvider(MODEL_ROUTES.QUIZ_GENERATION)(MODEL_ROUTES.QUIZ_GENERATION),
         output: Output.object({ schema: examOutputSchema }),
         prompt,
       })
@@ -176,7 +176,7 @@ export const generateExam = task({
       await supabase.from('ai_requests').insert({
         workspace_id: workspaceId,
         user_id: userId,
-        model: 'gpt-4o-mini',
+        model: MODEL_ROUTES.QUIZ_GENERATION,
         prompt_tokens: usage.inputTokens ?? 0,
         completion_tokens: usage.outputTokens ?? 0,
         cost_usd: (usage.inputTokens ?? 0) * 0.00000015 + (usage.outputTokens ?? 0) * 0.0000006,
@@ -215,7 +215,7 @@ export const generateExam = task({
       })
 
       const { output, usage } = await generateText({
-        model: openaiProvider('gpt-4o-mini'),
+        model: getProvider(MODEL_ROUTES.QUIZ_GENERATION)(MODEL_ROUTES.QUIZ_GENERATION),
         output: Output.object({ schema: examOutputSchema }),
         prompt,
       })
@@ -223,7 +223,7 @@ export const generateExam = task({
       await supabase.from('ai_requests').insert({
         workspace_id: workspaceId,
         user_id: userId,
-        model: 'gpt-4o-mini',
+        model: MODEL_ROUTES.QUIZ_GENERATION,
         prompt_tokens: usage.inputTokens ?? 0,
         completion_tokens: usage.outputTokens ?? 0,
         cost_usd: (usage.inputTokens ?? 0) * 0.00000015 + (usage.outputTokens ?? 0) * 0.0000006,

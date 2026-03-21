@@ -43,10 +43,13 @@ export const flashcardRouter = createTRPCRouter({
       await resolveWorkspace(ctx.supabase, input.workspaceId, userId)
 
       try {
-        const { tasks } = await import('@trigger.dev/sdk/v3')
-        await tasks.trigger('generate-flashcards', { workspaceId: input.workspaceId })
-      } catch {
-        // Trigger.dev not available in all environments — best effort
+        const { generateFlashcards } =
+          await import('@/../../../trigger/src/jobs/generate-flashcards')
+        console.log('[flashcard.generate] Triggering job for workspace:', input.workspaceId)
+        const handle = await generateFlashcards.trigger({ workspaceId: input.workspaceId })
+        console.log('[flashcard.generate] Trigger handle:', handle)
+      } catch (err) {
+        console.error('[flashcard.generate] Trigger failed:', err)
       }
 
       return { started: true }
