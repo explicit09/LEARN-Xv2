@@ -11,13 +11,25 @@ const RELATION_CONFIG: Record<
   ConceptBridgeProps['relation'],
   { label: string; color: string; bg: string }
 > = {
-  prerequisite: { label: 'is required for', color: 'text-blue-600', bg: 'bg-blue-500/10 border-blue-500/20' },
-  extends: { label: 'builds on', color: 'text-emerald-600', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-  related: { label: 'is related to', color: 'text-violet-600', bg: 'bg-violet-500/10 border-violet-500/20' },
+  prerequisite: {
+    label: 'is required for',
+    color: 'text-blue-600',
+    bg: 'bg-blue-500/10 border-blue-500/20',
+  },
+  extends: {
+    label: 'builds on',
+    color: 'text-emerald-600',
+    bg: 'bg-emerald-500/10 border-emerald-500/20',
+  },
+  related: {
+    label: 'is related to',
+    color: 'text-violet-600',
+    bg: 'bg-violet-500/10 border-violet-500/20',
+  },
 }
 
 export function ConceptBridge({ from, to, relation, explanation }: ConceptBridgeProps) {
-  const config = RELATION_CONFIG[relation]
+  const config = RELATION_CONFIG[relation] ?? RELATION_CONFIG.related
 
   return (
     <div className={`rounded-2xl border p-5 space-y-3 ${config.bg}`}>

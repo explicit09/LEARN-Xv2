@@ -4,8 +4,10 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { anthropic, MODEL_ROUTES } from '@/lib/ai'
 import { lessonSectionZ } from '@/lib/ai/schemas/lesson-section'
+// Tool description tells the LLM what renderSections does — no need for component instructions in system prompt
 import {
   buildLessonChatSystemPrompt,
+  buildLessonContextMessage,
   LESSON_CHAT_PROMPT_VERSION,
 } from '@/lib/ai/prompts/lesson-chat.v1'
 import type { PersonaContext } from '@/lib/ai/prompts/chat-system.v1'
@@ -171,19 +173,28 @@ export async function POST(req: NextRequest) {
     const settings = workspace.settings as { detectedDomain?: string } | null
     const domainSlug = settings?.detectedDomain
 
-    // Build system prompt
-    const systemContent = buildLessonChatSystemPrompt({
+    // Build prompts — split into lean system prompt + context message
+    const promptParams = {
       lessonTitle: lesson.title as string,
       lessonSectionsJson: JSON.stringify(lesson.structured_sections ?? [], null, 2).slice(0, 8000),
       sourceChunks,
       persona,
       domainInstructions: domainSlug ? `Domain: ${domainSlug}` : undefined,
-    })
+    }
+    const systemContent = buildLessonChatSystemPrompt(promptParams)
+    const contextMessage = buildLessonContextMessage(promptParams)
 
-    // Build messages
+    // Build messages — inject lesson context as first turn (cached by Anthropic)
     const history = (aiMessages ?? []).slice(0, -1)
     type MessageRole = 'user' | 'assistant'
     const messages: { role: MessageRole; content: string }[] = [
+      // Lesson context as a prefilled user→assistant exchange (cacheable)
+      { role: 'user' as const, content: contextMessage },
+      {
+        role: 'assistant' as const,
+        content: 'Understood. I have the lesson context. How can I help?',
+      },
+      // Conversation history
       ...history
         .filter((m) => m.role === 'user' || m.role === 'assistant')
         .map((m) => ({
