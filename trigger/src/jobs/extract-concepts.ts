@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
-import { anthropic, MODEL_ROUTES, calculateCost } from '../lib/ai'
+import { getProvider, getProviderName, MODEL_ROUTES, calculateCost } from '../lib/ai'
 import { deduplicateConcepts, normalizeConceptName } from '../lib/concept-utils'
 import { selectChunksWithinBudget } from '../lib/chunk-budget'
 import { buildExtractConceptsPrompt, PROMPT_VERSION } from '../lib/prompts/extract-concepts.v1'
@@ -94,7 +94,7 @@ export const extractConcepts = task({
     let usage = { inputTokens: 0, outputTokens: 0 }
     try {
       const result = await generateText({
-        model: anthropic(MODEL),
+        model: getProvider(MODEL)(MODEL),
         output: Output.object({ schema: extractionSchema }),
         prompt,
       })
@@ -112,7 +112,7 @@ export const extractConcepts = task({
     await supabase.from('ai_requests').insert({
       workspace_id: workspaceId,
       model: MODEL,
-      provider: 'anthropic',
+      provider: getProviderName(MODEL),
       prompt_tokens: usage.inputTokens,
       completion_tokens: usage.outputTokens,
       cost_usd: calculateCost(MODEL, usage.inputTokens, usage.outputTokens),

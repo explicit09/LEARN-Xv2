@@ -62,6 +62,25 @@ export const processDocument = task({
   id: 'process-document',
   retry: { maxAttempts: 2 },
 
+  onFailure: async (payload: ProcessDocumentPayload, error) => {
+    // Runs after ALL retries are exhausted — guarantees the document doesn't stay stuck on 'processing'
+    try {
+      const supabase = makeSupabase()
+      const message = error instanceof Error ? error.message : String(error)
+      await supabase
+        .from('documents')
+        .update({ status: 'failed', updated_at: new Date().toISOString() })
+        .eq('id', payload.documentId)
+      await supabase
+        .from('jobs')
+        .update({ status: 'failed', error: message })
+        .eq('id', payload.jobId)
+      logger.error('process-document onFailure', { documentId: payload.documentId, error: message })
+    } catch {
+      // Best effort — don't throw from onFailure
+    }
+  },
+
   run: async (payload: ProcessDocumentPayload) => {
     const { documentId, jobId } = payload
     const supabase = makeSupabase()

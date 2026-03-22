@@ -124,8 +124,8 @@ CREATE TABLE documents (
   file_size        INTEGER,         -- bytes
   storage_path     TEXT,            -- Supabase Storage path
   source_url       TEXT,            -- for URL/YouTube sources
-  status           TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  status           TEXT NOT NULL DEFAULT 'uploading'
+    CHECK (status IN ('uploading', 'processing', 'ready', 'failed')),
   role             TEXT NOT NULL DEFAULT 'primary'
     CHECK (role IN ('primary', 'supplementary', 'reference')),
   -- Auto-detected during processing. 'primary' = drives syllabus structure.
@@ -741,6 +741,7 @@ CREATE POLICY "users_own_workspaces"
 Apply the same pattern to: documents, chunks, chunk_embeddings, concepts, lessons, syllabuses, syllabus_units, syllabus_topics, chat_sessions, chat_messages, quizzes, flashcard_sets, flashcards, mastery_records, learning_events, jobs.
 
 For syllabus child tables (`syllabus_units`, `syllabus_topics`, `syllabus_topic_concepts`, `syllabus_topic_documents`): RLS is via a JOIN to the parent `syllabuses` table which is already workspace-scoped. Use the pattern:
+
 ```sql
 CREATE POLICY "syllabus_units_workspace_access" ON syllabus_units
   FOR ALL USING (

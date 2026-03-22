@@ -15,7 +15,7 @@ export const google = createGoogleGenerativeAI({
 })
 
 export const MODEL_ROUTES = {
-  CONCEPT_EXTRACTION: process.env.CONCEPT_MODEL ?? 'claude-sonnet-4-6',
+  CONCEPT_EXTRACTION: process.env.CONCEPT_MODEL ?? 'gemini-2.5-flash',
   CHUNK_ENRICHMENT: process.env.ENRICHMENT_MODEL ?? 'gpt-5.4-nano',
   LESSON_GENERATION: process.env.LESSON_MODEL ?? 'claude-sonnet-4-6',
   SYLLABUS_PLANNING: process.env.SYLLABUS_MODEL ?? 'gpt-5.4-mini',

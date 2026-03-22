@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { trpc } from '@/lib/trpc/client'
 import { CheckCircle, Circle, Loader2, FileText, Brain, ListTree, BookOpen } from 'lucide-react'
 
@@ -16,22 +18,32 @@ interface PipelineStep {
 }
 
 export function PipelineActivityFeed({ workspaceId }: PipelineActivityFeedProps) {
-  const { data: docs } = trpc.document.list.useQuery({ workspaceId })
-  const { data: lessons } = trpc.lesson.list.useQuery({ workspaceId }, { refetchInterval: 5000 })
+  const router = useRouter()
+  const prevDoneCount = useRef(0)
+
+  const { data: docs } = trpc.document.list.useQuery({ workspaceId }, { refetchInterval: 3000 })
 
   const hasProcessing = docs?.some((d) => ['uploading', 'processing'].includes(d.status as string))
+  const docCount = docs?.filter((d) => d.status === 'ready').length ?? 0
 
-  // Also poll concepts + syllabus to track pipeline
+  // Pipeline is potentially active if docs exist — keep polling until all steps done
+  const pipelineActive = docCount > 0
+
   const { data: conceptData } = trpc.concept.list.useQuery(
     { workspaceId },
-    { refetchInterval: hasProcessing ? 3000 : false },
-  )
-  const { data: syllabusData } = trpc.syllabus.get.useQuery(
-    { workspaceId },
-    { refetchInterval: hasProcessing || (conceptData?.length ?? 0) > 0 ? 5000 : false },
+    { refetchInterval: pipelineActive ? 4000 : false },
   )
 
-  const docCount = docs?.filter((d) => d.status === 'ready').length ?? 0
+  const { data: syllabusData } = trpc.syllabus.get.useQuery(
+    { workspaceId },
+    { refetchInterval: pipelineActive ? 5000 : false },
+  )
+
+  const { data: lessons } = trpc.lesson.list.useQuery(
+    { workspaceId },
+    { refetchInterval: pipelineActive ? 5000 : false },
+  )
+
   const conceptCount = conceptData?.length ?? 0
   const hasSyllabus = Boolean(syllabusData?.units?.length)
   const lessonCount = lessons?.length ?? 0
@@ -41,11 +53,27 @@ export function PipelineActivityFeed({ workspaceId }: PipelineActivityFeedProps)
       0,
     ) ?? 0
 
+  const allDone = hasSyllabus && lessonCount > 0 && lessonCount >= totalTopics && !hasProcessing
+
+  // Count completed steps to detect transitions
+  const doneCount =
+    (docCount > 0 ? 1 : 0) +
+    (conceptCount > 0 ? 1 : 0) +
+    (hasSyllabus ? 1 : 0) +
+    (lessonCount >= totalTopics && totalTopics > 0 ? 1 : 0)
+
+  // Refresh server-rendered page parts when a pipeline step completes
+  useEffect(() => {
+    if (doneCount > prevDoneCount.current && prevDoneCount.current > 0) {
+      router.refresh()
+    }
+    prevDoneCount.current = doneCount
+  }, [doneCount, router])
+
   // Don't show if nothing is happening and nothing has been built
-  if (docCount === 0 && conceptCount === 0) return null
+  if (docCount === 0 && conceptCount === 0 && !hasProcessing) return null
 
   // Don't show if everything is complete
-  const allDone = hasSyllabus && lessonCount > 0 && lessonCount >= totalTopics && !hasProcessing
   if (allDone) return null
 
   const steps: PipelineStep[] = [
