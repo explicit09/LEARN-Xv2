@@ -26,23 +26,18 @@ export function PipelineActivityFeed({ workspaceId }: PipelineActivityFeedProps)
   const hasProcessing = docs?.some((d) => ['uploading', 'processing'].includes(d.status as string))
   const docCount = docs?.filter((d) => d.status === 'ready').length ?? 0
 
-  // Pipeline is potentially active if docs exist — keep polling until all steps done
-  const pipelineActive = docCount > 0
-
+  // Always poll — this component only mounts when hasDocuments is true (server-side)
   const { data: conceptData } = trpc.concept.list.useQuery(
     { workspaceId },
-    { refetchInterval: pipelineActive ? 4000 : false },
+    { refetchInterval: 4000 },
   )
 
   const { data: syllabusData } = trpc.syllabus.get.useQuery(
     { workspaceId },
-    { refetchInterval: pipelineActive ? 5000 : false },
+    { refetchInterval: 5000 },
   )
 
-  const { data: lessons } = trpc.lesson.list.useQuery(
-    { workspaceId },
-    { refetchInterval: pipelineActive ? 5000 : false },
-  )
+  const { data: lessons } = trpc.lesson.list.useQuery({ workspaceId }, { refetchInterval: 5000 })
 
   const conceptCount = conceptData?.length ?? 0
   const hasSyllabus = Boolean(syllabusData?.units?.length)
@@ -70,10 +65,7 @@ export function PipelineActivityFeed({ workspaceId }: PipelineActivityFeedProps)
     prevDoneCount.current = doneCount
   }, [doneCount, router])
 
-  // Don't show if nothing is happening and nothing has been built
-  if (docCount === 0 && conceptCount === 0 && !hasProcessing) return null
-
-  // Don't show if everything is complete
+  // Hide once everything is complete
   if (allDone) return null
 
   const steps: PipelineStep[] = [
