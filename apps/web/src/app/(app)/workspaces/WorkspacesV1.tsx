@@ -5,7 +5,16 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Button, Input } from '@learn-x/ui'
-import { ArrowUpDown, BookOpen, Command, ChevronDown, Filter, Search, Sparkles } from 'lucide-react'
+import {
+  ArrowUpDown,
+  BookOpen,
+  Command,
+  ChevronDown,
+  Filter,
+  Plus,
+  Search,
+  Sparkles,
+} from 'lucide-react'
 import { CreateWorkspaceModal } from '@/components/workspace/CreateWorkspaceModal'
 import { cn } from '@learn-x/utils'
 import { WorkspaceGrid } from './WorkspaceGrid'
