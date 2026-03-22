@@ -1,87 +1,101 @@
+'use client'
+
 import Link from 'next/link'
+import Image from 'next/image'
+import { motion } from 'framer-motion'
 import { RegisterForm } from '@/components/auth/RegisterForm'
+import { AnimatedHeroMockup } from '@/components/marketing/AnimatedHeroMockup'
 
 export default function RegisterPage() {
   return (
-    <div className="flex min-h-screen">
-      {/* Left panel — marketing */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between bg-[hsl(222,47%,7%)] p-12 text-white">
-        <div>
-          <span className="text-lg font-semibold tracking-tight text-white">LEARN-X</span>
-        </div>
-
-        <div className="space-y-10">
-          <div className="space-y-4">
-            <h1 className="text-4xl font-bold leading-tight tracking-tight text-white">
-              Turn any document
-              <br />
-              into a personalized
-              <br />
-              study system.
-            </h1>
-            <p className="text-base text-[hsl(214,32%,65%)] leading-relaxed max-w-sm">
-              LEARN-X builds lessons, quizzes, and flashcards around your material — adapting to how
-              you learn with FSRS-6 spaced repetition.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            {[
-              'Upload PDFs, slides, or notes',
-              'Get auto-generated lessons tailored to you',
-              'Master concepts with spaced repetition',
-            ].map((feature) => (
-              <div key={feature} className="flex items-center gap-3">
-                <div className="h-5 w-5 rounded-full bg-[hsl(221,83%,53%)] flex items-center justify-center flex-shrink-0">
-                  <svg
-                    className="h-3 w-3 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2.5}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                </div>
-                <span className="text-sm text-[hsl(214,32%,75%)]">{feature}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p className="text-xs text-[hsl(215,20%,45%)]">© 2025 LEARN-X · Privacy · Terms</p>
+    <main className="dark bg-background text-foreground min-h-screen relative overflow-hidden flex">
+      {/* Global Aurora Background */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <motion.div
+          animate={{ x: [-20, 20, -20], y: [-20, 20, -20] }}
+          transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
+          className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-600/15 blur-[140px] rounded-full mix-blend-screen"
+        />
+        <motion.div
+          animate={{ x: [20, -20, 20], y: [20, -20, 20] }}
+          transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+          className="absolute top-[30%] right-[-10%] w-[50%] h-[50%] bg-purple-600/15 blur-[140px] rounded-full mix-blend-screen"
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:48px_48px] opacity-20 mask-image-[radial-gradient(ellipse_at_center,black_50%,transparent_100%)]" />
       </div>
 
-      {/* Right panel — form */}
-      <div className="flex flex-1 items-center justify-center bg-[hsl(222,38%,9%)] p-8">
-        <div className="w-full max-w-sm space-y-6">
-          {/* Mobile logo */}
-          <div className="lg:hidden text-center">
-            <span className="text-xl font-semibold tracking-tight">LEARN-X</span>
-          </div>
+      {/* Left panel — Hero & Proof */}
+      <div className="relative z-10 hidden lg:flex lg:w-[55%] flex-col justify-center px-12 xl:px-20 border-r border-surface-border-strong bg-background/60 backdrop-blur-3xl">
+        <Link href="/" className="absolute top-8 left-12 transition-opacity hover:opacity-70">
+          <Image
+            src="/brand/logo.svg"
+            alt="LEARN-X Logo"
+            width={700}
+            height={160}
+            className="h-40 w-auto brightness-0 invert opacity-90"
+            priority
+          />
+        </Link>
 
-          <div className="space-y-1">
-            <h2 className="text-2xl font-semibold tracking-tight">Create your account</h2>
-            <p className="text-sm text-muted-foreground">Free forever · No credit card needed</p>
-          </div>
-
-          <RegisterForm />
-
-          <p className="text-center text-sm text-muted-foreground">
-            Already have an account?{' '}
-            <Link
-              href="/login"
-              className="font-medium text-foreground underline-offset-4 hover:underline"
-            >
-              Sign in
-            </Link>
+        <div className="max-w-xl mx-auto w-full">
+          <h1 className="text-4xl xl:text-5xl font-[family:var(--font-display)] font-bold tracking-tight text-foreground mb-4 leading-[1.1]">
+            One concept. <br />
+            <span className="text-muted-foreground">Explained the way you understand it.</span>
+          </h1>
+          <p className="text-lg text-foreground/80 mb-12">
+            Join LEARN-X and see how the same concept changes depending on how you learn.
           </p>
+
+          <div className="w-full transform xl:scale-105 origin-left">
+            <AnimatedHeroMockup />
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Right panel — Form */}
+      <div className="relative z-10 flex flex-1 items-center justify-center p-6 sm:p-12">
+        <div className="w-full max-w-sm">
+          {/* Mobile logo */}
+          <div className="lg:hidden text-center mb-10">
+            <Link href="/" className="inline-block transition-opacity hover:opacity-70">
+              <Image
+                src="/brand/logo.svg"
+                alt="LEARN-X Logo"
+                width={700}
+                height={160}
+                className="h-24 sm:h-32 w-auto brightness-0 invert opacity-90 mx-auto"
+                priority
+              />
+            </Link>
+          </div>
+
+          <div className="glass-card spatial-surface rounded-[2rem] p-8 border border-surface-border shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden">
+            <div className="spatial-surface-glow opacity-30" />
+            <div className="relative z-10 space-y-6">
+              <div className="space-y-1.5 text-center">
+                <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+                  Create account
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Free forever · No credit card needed
+                </p>
+              </div>
+
+              <RegisterForm />
+
+              <p className="text-center text-sm text-foreground/70">
+                Already have an account?{' '}
+                <Link
+                  href="/login"
+                  className="font-medium text-foreground underline-offset-4 hover:underline"
+                >
+                  Sign in
+                </Link>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
   )
 }

@@ -86,7 +86,7 @@ export function PipelineActivityFeed({ workspaceId }: PipelineActivityFeedProps)
   ]
 
   return (
-    <div className="rounded-2xl border border-border bg-card/60 p-5">
+    <div className="rounded-2xl border border-border bg-card/60 p-3 sm:p-5">
       <h3 className="text-sm font-bold mb-4 text-foreground">Building your learning path</h3>
       <div className="space-y-3">
         {steps.map((step) => {

@@ -179,13 +179,13 @@ export function LessonChatPanel({
         animate={{ width: chatWidth, opacity: 1 }}
         exit={{ width: 0, opacity: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="fixed right-0 top-0 h-screen z-40 flex flex-col bg-background/95 backdrop-blur-xl border-l border-border shadow-lg"
+        className="fixed right-0 top-0 h-screen z-40 flex flex-col bg-background/95 backdrop-blur-xl border-l border-border shadow-lg max-sm:!w-full"
         style={{ width: chatWidth }}
       >
         {/* Resize handle */}
         <div
           onMouseDown={handleResizeStart}
-          className={`absolute left-0 top-0 h-full w-1.5 cursor-col-resize group/resize z-10 ${isResizing ? 'bg-primary/30' : 'hover:bg-primary/20'}`}
+          className={`absolute left-0 top-0 h-full w-1.5 cursor-col-resize group/resize z-10 hidden sm:block ${isResizing ? 'bg-primary/30' : 'hover:bg-primary/20'}`}
         >
           <div className="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/resize:opacity-100 transition-opacity">
             <GripVertical className="w-4 h-4 text-muted-foreground" />

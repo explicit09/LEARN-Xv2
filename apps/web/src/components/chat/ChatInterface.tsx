@@ -88,7 +88,7 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
   return (
     <div className="flex flex-col h-full w-full relative z-10">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 md:px-12 lg:px-20 py-8 space-y-8 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-6 md:px-12 lg:px-20 py-8 space-y-8 custom-scrollbar">
         {messages.length === 0 && (
           <EmptyState
             workspaceId={workspaceId}
@@ -122,7 +122,7 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
           // which handles text + tool calls in a single pass
           return (
             <div key={m.id} className="flex justify-start">
-              <div className="max-w-[85%]">
+              <div className="max-w-[95%] sm:max-w-[85%]">
                 <LessonChatMessage role="assistant" parts={parts} />
               </div>
             </div>
@@ -156,7 +156,7 @@ export function ChatInterface({ sessionId, workspaceId, initialMessages }: ChatI
       </div>
 
       {/* Input */}
-      <div className="px-6 md:px-12 lg:px-20 py-4 bg-gradient-to-t from-background via-background to-transparent">
+      <div className="px-3 sm:px-6 md:px-12 lg:px-20 py-4 pb-20 md:pb-4 bg-gradient-to-t from-background via-background to-transparent">
         <ChatInput
           value={input}
           onChange={(v) => setInput(v)}

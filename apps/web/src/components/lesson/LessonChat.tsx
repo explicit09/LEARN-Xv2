@@ -129,7 +129,7 @@ export function LessonChat({
 
   // Expanded panel — fixed bottom-right
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-[420px] max-w-[calc(100vw-48px)] flex flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200">
+    <div className="fixed bottom-20 md:bottom-6 right-2 md:right-6 z-50 w-[calc(100vw-16px)] md:w-[420px] max-w-[420px] flex flex-col rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 fade-in duration-200">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30 shrink-0">
         <div className="flex items-center gap-2">

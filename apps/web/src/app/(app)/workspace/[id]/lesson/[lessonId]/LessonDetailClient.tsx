@@ -24,6 +24,8 @@ import {
   Minimize2,
 } from 'lucide-react'
 import { Button } from '@learn-x/ui'
+import { MobileLessonFooter } from '@/components/lesson/MobileLessonFooter'
+import { MobileLessonDrawer } from '@/components/lesson/MobileLessonDrawer'
 
 interface LessonDetailClientProps {
   workspaceId: string
@@ -168,7 +170,7 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
 
   return (
     <>
-      <div className="flex-1 flex flex-col md:flex-row max-w-[1600px] w-full mx-auto p-4 lg:p-8 gap-8 overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row max-w-[1600px] w-full mx-auto px-0 py-2 md:p-4 lg:p-8 gap-4 md:gap-8 overflow-x-hidden">
         {!focusMode && (
           <LessonSidebar
             workspaceId={workspaceId}
@@ -182,7 +184,7 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
 
         <div
           ref={contentRef}
-          className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-24 lg:pb-12 scroll-smooth custom-scrollbar pr-2 lg:pr-8"
+          className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-24 lg:pb-12 scroll-smooth custom-scrollbar md:pr-2 lg:pr-8"
         >
           {/* Completion celebration banner */}
           <AnimatePresence>
@@ -202,6 +204,15 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <MobileLessonDrawer
+                lessons={sortedLessons.map((l) => ({
+                  id: l.id as string,
+                  title: l.title as string,
+                  isCompleted: !!(l as Record<string, unknown>).is_completed,
+                }))}
+                currentLessonId={lessonId}
+                workspaceId={workspaceId}
+              />
               <BookOpen className="w-4 h-4" />
               <span>Workspace</span>
               <span>/</span>
@@ -277,8 +288,8 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
           )}
 
           {/* Title */}
-          <div className="mb-10 lg:mb-16 max-w-4xl">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] mb-6">
+          <div className="mb-6 md:mb-10 lg:mb-16 max-w-full md:max-w-4xl">
+            <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] mb-4 md:mb-6 break-words">
               {lesson.title}
             </h1>
             {lesson.summary && (
@@ -294,7 +305,7 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
           </div>
 
           {/* Content */}
-          <div className="prose prose-lg dark:prose-invert max-w-5xl w-full prose-headings:font-bold prose-h2:text-3xl prose-h2:mt-12 prose-h2:mb-6 prose-p:leading-relaxed prose-p:text-muted-foreground prose-a:text-primary">
+          <div className="prose prose-base sm:prose-lg dark:prose-invert max-w-full md:max-w-5xl w-full break-words prose-headings:font-bold prose-h2:text-2xl sm:prose-h2:text-3xl prose-h2:mt-8 sm:prose-h2:mt-12 prose-h2:mb-4 sm:prose-h2:mb-6 prose-p:leading-relaxed prose-p:text-muted-foreground prose-a:text-primary">
             <LessonRenderer
               sections={sections}
               collapsible
@@ -308,8 +319,8 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
           {/* Sources panel */}
           <SourcesPanel sources={(lesson.sourceMapping as SourceInfo[]) ?? []} />
 
-          {/* Footer navigation */}
-          <div className="mt-16 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-6 max-w-5xl w-full">
+          {/* Footer navigation — desktop only */}
+          <div className="mt-16 pt-8 border-t border-border hidden md:flex flex-col sm:flex-row items-center justify-between gap-6 max-w-5xl w-full">
             <div>
               {!lesson.isCompleted && (
                 <Button
@@ -363,6 +374,19 @@ export function LessonDetailClient({ workspaceId, lessonId }: LessonDetailClient
         workspaceId={workspaceId}
         open={showRating}
         onClose={() => setShowRating(false)}
+      />
+
+      <MobileLessonFooter
+        prevLesson={
+          prevLesson ? { id: prevLesson.id as string, title: prevLesson.title as string } : null
+        }
+        nextLesson={
+          nextLesson ? { id: nextLesson.id as string, title: nextLesson.title as string } : null
+        }
+        isCompleted={!!lesson.isCompleted}
+        markComplete={markComplete}
+        lessonId={lessonId}
+        workspaceId={workspaceId}
       />
     </>
   )

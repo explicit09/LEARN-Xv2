@@ -80,7 +80,7 @@ export default function OnboardingPage() {
     updateProfile.isPending || upsertPersona.isPending || completeOnboarding.isPending
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-background p-8">
+    <div className="flex flex-1 items-center justify-center bg-background p-4 sm:p-8">
       <div className="w-full max-w-lg">
         <div className="mb-2 flex gap-1">
           {[1, 2, 3].map((s) => (
@@ -194,7 +194,7 @@ export default function OnboardingPage() {
 
               <div>
                 <p className="mb-2 text-sm font-medium">Tone preference</p>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 sm:flex gap-2">
                   {TONE_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
@@ -213,7 +213,7 @@ export default function OnboardingPage() {
 
               <div>
                 <p className="mb-2 text-sm font-medium">Starting difficulty</p>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 sm:flex gap-2">
                   {DIFFICULTY_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}

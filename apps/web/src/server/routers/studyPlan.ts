@@ -1,138 +1,17 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import type { SupabaseClient } from '@supabase/supabase-js'
 
+import type { PlanItem } from '@/lib/study-plan/types'
 import { createTRPCRouter, protectedProcedure } from '../trpc'
+import {
+  resolveUserId,
+  resolveWorkspace,
+  buildStudyPlanItems,
+  computeReadinessScore,
+} from './studyPlan-helpers'
 
-async function resolveUserId(supabase: SupabaseClient, authId: string): Promise<string> {
-  const { data: user, error } = await supabase
-    .from('users')
-    .select('id')
-    .eq('auth_id', authId)
-    .single()
-  if (error || !user) throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found' })
-  return user.id as string
-}
-
-async function resolveWorkspace(
-  supabase: SupabaseClient,
-  workspaceId: string,
-  userId: string,
-): Promise<string> {
-  const { data: workspace, error } = await supabase
-    .from('workspaces')
-    .select('id')
-    .eq('id', workspaceId)
-    .eq('user_id', userId)
-    .single()
-  if (error || !workspace)
-    throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace not found' })
-  return workspace.id as string
-}
-
-export interface PlanItem {
-  type: string
-  resourceId: string
-  resourceType: string
-  estimatedMinutes: number
-  completed: boolean
-  workspaceId?: string
-}
-
-/**
- * Build a simple study plan from mastery + due flashcards + incomplete lessons.
- * Returns up to 5 items prioritized by: due flashcards > low mastery concepts > new lessons.
- */
-async function buildStudyPlanItems(
-  supabase: SupabaseClient,
-  userId: string,
-  workspaceId?: string,
-): Promise<PlanItem[]> {
-  const items: PlanItem[] = []
-
-  // 1. Due flashcards
-  let workspaceIds: string[] = []
-  if (workspaceId) {
-    workspaceIds = [workspaceId]
-  } else {
-    const { data: workspaces } = await supabase
-      .from('workspaces')
-      .select('id')
-      .eq('user_id', userId)
-      .limit(25)
-    workspaceIds = (workspaces ?? []).map((w) => w.id as string)
-  }
-
-  if (workspaceIds.length > 0) {
-    const { data: dueSets } = await supabase
-      .from('flashcard_sets')
-      .select(
-        `id, title, workspace_id,
-         flashcards!inner(id, due_at)`,
-      )
-      .in('workspace_id', workspaceIds)
-      .lte('flashcards.due_at', new Date().toISOString())
-      .limit(3)
-
-    if (dueSets?.length) {
-      items.push({
-        type: 'flashcard_review',
-        resourceId: dueSets[0]?.id ?? '',
-        resourceType: 'flashcard_set',
-        estimatedMinutes: Math.min(10, dueSets.length * 2),
-        completed: false,
-        workspaceId: dueSets[0]?.workspace_id as string,
-      })
-    }
-  }
-
-  // 2. Incomplete lessons (workspace scoped if given)
-  let lessonsQuery = supabase
-    .from('lessons')
-    .select('id, title, workspace_id')
-    .eq('user_id', userId)
-    .eq('is_completed', false)
-    .limit(3)
-
-  if (workspaceId) {
-    lessonsQuery = lessonsQuery.eq('workspace_id', workspaceId)
-  }
-
-  const { data: incompleteLessons } = await lessonsQuery
-
-  for (const lesson of incompleteLessons ?? []) {
-    if (items.length >= 5) break
-    items.push({
-      type: 'lesson',
-      resourceId: lesson.id,
-      resourceType: 'lesson',
-      estimatedMinutes: 15,
-      completed: false,
-      workspaceId: lesson.workspace_id as string,
-    })
-  }
-
-  return items.slice(0, 5)
-}
-
-/**
- * Compute a simple readiness score: average mastery_level across all concepts in workspace.
- */
-async function computeReadinessScore(
-  supabase: SupabaseClient,
-  workspaceId: string,
-): Promise<number> {
-  const { data: mastery } = await supabase
-    .from('mastery_records')
-    .select('mastery_level')
-    .eq('workspace_id', workspaceId)
-
-  if (!mastery?.length) return 0
-
-  const avg =
-    mastery.reduce((sum, r) => sum + ((r.mastery_level as number) ?? 0), 0) / mastery.length
-  return Math.min(1, Math.max(0, avg))
-}
+export type { PlanItem } from '@/lib/study-plan/types'
+export { markPlanItemByResource } from './studyPlan-helpers'
 
 export const studyPlanRouter = createTRPCRouter({
   /**
@@ -163,9 +42,25 @@ export const studyPlanRouter = createTRPCRouter({
       const { data: existing } = await query.maybeSingle()
 
       if (existing) {
+        const items = (existing.items as PlanItem[]) ?? []
+        // Hydrate missing titles for lesson items
+        const needTitle = items.filter((i) => i.type === 'lesson' && !i.title)
+        if (needTitle.length > 0) {
+          const ids = needTitle.map((i) => i.resourceId)
+          const { data: lessons } = await ctx.supabase
+            .from('lessons')
+            .select('id, title')
+            .in('id', ids)
+          const titleMap = new Map((lessons ?? []).map((l) => [l.id as string, l.title as string]))
+          for (const item of items) {
+            if (item.type === 'lesson' && !item.title) {
+              item.title = titleMap.get(item.resourceId) ?? 'Lesson'
+            }
+          }
+        }
         return {
           id: existing.id as string,
-          items: (existing.items as PlanItem[]) ?? [],
+          items,
           examDate: existing.exam_date as string | null,
           readinessScore: existing.readiness_score as number | null,
           date: existing.date as string,

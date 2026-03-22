@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { trpc } from '@/lib/trpc/client'
 import { LessonRenderer } from './LessonRenderer'
-import { PodcastPlayer } from '@/components/podcast/PodcastPlayer'
 import { LessonRatingDialog } from './LessonRatingDialog'
 import { SourcesPanel } from './sections/SourcesPanel'
 import type { SourceInfo } from './sections/CitationBadge'
@@ -91,9 +90,9 @@ export function LessonContentPane({
   const readMinutes = Math.max(1, Math.ceil(wordCount / 200))
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col relative">
+    <div className="flex-1 min-h-0 min-w-0 w-full flex flex-col relative overflow-x-hidden">
       <motion.div
-        className="flex-1 min-h-0 flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm m-4"
+        className="flex-1 min-h-0 flex flex-col overflow-x-hidden rounded-lg border bg-card shadow-sm m-1 sm:m-2 md:m-4"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
@@ -172,7 +171,7 @@ function ContentHeader({
   onNavigate: (id: string) => void
 }) {
   return (
-    <div className="px-5 py-3 border-b border-border/50 flex-shrink-0 bg-card/50 backdrop-blur-sm relative overflow-hidden">
+    <div className="px-3 sm:px-5 py-3 border-b border-border/50 flex-shrink-0 bg-card/50 backdrop-blur-sm relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent pointer-events-none" />
       <div className="flex items-center justify-between relative z-10">
         <div className="flex-1 min-w-0">
@@ -236,9 +235,9 @@ function ContentBody({
   regenerate: { mutate: (input: { id: string; workspaceId: string }) => void; isPending: boolean }
 }) {
   return (
-    <div className="flex-1 min-h-0 overflow-hidden bg-background/50">
+    <div className="flex-1 min-h-0 overflow-x-hidden bg-background/50">
       <div className="h-full overflow-y-auto custom-scrollbar">
-        <div className="mx-auto p-6 pb-12 max-w-5xl">
+        <div className="mx-auto px-3 py-4 sm:p-6 pb-12 max-w-full md:max-w-3xl lg:max-w-5xl">
           {lesson.sourceUpdated && (
             <div className="mb-6 flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
               <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
@@ -259,11 +258,7 @@ function ContentBody({
             </div>
           )}
 
-          <div className="mb-8">
-            <PodcastPlayer workspaceId={workspaceId} lessonId={lessonId} />
-          </div>
-
-          <div className="prose prose-lg dark:prose-invert max-w-none prose-headings:font-bold prose-p:leading-relaxed prose-p:text-muted-foreground prose-a:text-primary">
+          <div className="prose prose-base sm:prose-lg dark:prose-invert max-w-none break-words prose-headings:font-bold prose-p:leading-relaxed prose-p:text-muted-foreground prose-a:text-primary">
             <LessonRenderer
               sections={sections}
               collapsible
@@ -301,8 +296,8 @@ function ContentActionBar({
   onNavigate: (id: string) => void
 }) {
   return (
-    <div className="border-t border-border/50 bg-card/80 backdrop-blur-md flex-shrink-0 p-4">
-      <div className="flex items-center justify-between max-w-5xl mx-auto">
+    <div className="border-t border-border/50 bg-card/80 backdrop-blur-md flex-shrink-0 px-3 py-3 sm:p-4">
+      <div className="flex items-center justify-between max-w-full md:max-w-3xl lg:max-w-5xl mx-auto gap-2">
         <div className="flex items-center gap-2">
           {prevLesson && (
             <Button variant="ghost" size="sm" onClick={() => onNavigate(prevLesson.id)}>

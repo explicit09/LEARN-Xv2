@@ -1,31 +1,17 @@
 'use client'
 
-import { use, useEffect, useRef, useState, useCallback } from 'react'
+import { use, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { trpc } from '@/lib/trpc/client'
-import { Topbar } from '@/components/layout/Topbar'
+import { BookOpen, ChevronLeft, Share2 } from 'lucide-react'
+import { Button } from '@learn-x/ui'
+import { useForceSimulation, type GraphNode, type GraphEdge } from './use-force-simulation'
+
+type Node = GraphNode
+type Edge = GraphEdge
 
 interface GraphPageProps {
   params: Promise<{ id: string }>
-}
-
-type Node = {
-  id: string
-  name: string
-  masteryLevel: number | null
-  tag: string | null
-  domain: string | null
-  // Physics simulation state
-  x: number
-  y: number
-  vx: number
-  vy: number
-}
-
-type Edge = {
-  source: string
-  target: string
-  relationType: string
 }
 
 const MASTERY_COLOR = (level: number | null) => {
@@ -40,101 +26,6 @@ const RELATION_DASH: Record<string, string> = {
   related: '4 4',
   extends: '8 4',
   part_of: '2 6',
-}
-
-function useForceSimulation(nodes: Node[], edges: Edge[], width: number, height: number) {
-  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({})
-  const frameRef = useRef<number | undefined>(undefined)
-  const simNodes = useRef<Node[]>([])
-
-  useEffect(() => {
-    if (!nodes.length || !width || !height) return
-
-    // Initialize positions in a circle
-    simNodes.current = nodes.map((n, i) => ({
-      ...n,
-      x: width / 2 + Math.cos((i / nodes.length) * 2 * Math.PI) * 120,
-      y: height / 2 + Math.sin((i / nodes.length) * 2 * Math.PI) * 120,
-      vx: 0,
-      vy: 0,
-    }))
-
-    const idxMap: Record<string, number> = {}
-    simNodes.current.forEach((n, i) => {
-      idxMap[n.id] = i
-    })
-
-    let iter = 0
-    const MAX_ITER = 200
-
-    function tick() {
-      if (iter >= MAX_ITER) return
-      iter++
-      const ns = simNodes.current
-
-      // Repulsion
-      for (let i = 0; i < ns.length; i++) {
-        for (let j = i + 1; j < ns.length; j++) {
-          const ni = ns[i]!
-          const nj = ns[j]!
-          const dx = nj.x - ni.x
-          const dy = nj.y - ni.y
-          const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1)
-          const force = 3000 / (dist * dist)
-          const fx = (dx / dist) * force
-          const fy = (dy / dist) * force
-          ni.vx -= fx
-          ni.vy -= fy
-          nj.vx += fx
-          nj.vy += fy
-        }
-      }
-
-      // Attraction (springs for edges)
-      for (const edge of edges) {
-        const si = idxMap[edge.source]
-        const ti = idxMap[edge.target]
-        if (si === undefined || ti === undefined) continue
-        const src = ns[si]!
-        const tgt = ns[ti]!
-        const dx = tgt.x - src.x
-        const dy = tgt.y - src.y
-        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1)
-        const TARGET_DIST = 160
-        const force = (dist - TARGET_DIST) * 0.03
-        const fx = (dx / dist) * force
-        const fy = (dy / dist) * force
-        src.vx += fx
-        src.vy += fy
-        tgt.vx -= fx
-        tgt.vy -= fy
-      }
-
-      // Center gravity
-      for (const n of ns) {
-        n.vx += (width / 2 - n.x) * 0.002
-        n.vy += (height / 2 - n.y) * 0.002
-        // Apply velocity with damping
-        n.vx *= 0.85
-        n.vy *= 0.85
-        n.x = Math.max(40, Math.min(width - 40, n.x + n.vx))
-        n.y = Math.max(40, Math.min(height - 40, n.y + n.vy))
-      }
-
-      const snap: Record<string, { x: number; y: number }> = {}
-      for (const n of ns) snap[n.id] = { x: n.x, y: n.y }
-      setPositions(snap)
-
-      frameRef.current = requestAnimationFrame(tick)
-    }
-
-    frameRef.current = requestAnimationFrame(tick)
-    return () => {
-      if (frameRef.current !== undefined) cancelAnimationFrame(frameRef.current)
-    }
-  }, [nodes, edges, width, height])
-
-  return positions
 }
 
 function KnowledgeGraphCanvas({ nodes, edges }: { nodes: Node[]; edges: Edge[] }) {
@@ -357,27 +248,49 @@ function GraphView({ workspaceId }: { workspaceId: string }) {
 export default function GraphPage({ params }: GraphPageProps) {
   const { id: workspaceId } = use(params)
   return (
-    <>
-      <Topbar title="Knowledge Graph" />
-      <div className="flex-1 p-6">
-        <div className="mx-auto max-w-5xl space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold">Knowledge Graph</h1>
-              <p className="text-sm text-muted-foreground">
-                Visual map of concepts and their relationships, coloured by mastery level
-              </p>
-            </div>
+    <div className="min-h-screen bg-background">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-50/40 via-purple-50/20 to-pink-50/20 dark:from-blue-950/20 dark:via-purple-950/10 dark:to-pink-950/10" />
+      <div className="relative z-10 mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
             <Link
-              href={`/workspace/${workspaceId}`}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              href={`/workspace/${workspaceId}?tab=overview`}
+              className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
-              ← Back to workspace
+              <ChevronLeft className="h-4 w-4" />
+              <span>Back</span>
             </Link>
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 text-blue-500 dark:text-blue-400">
+                <BookOpen className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-muted-foreground">
+                  Workspace Graph
+                </p>
+                <h1 className="text-xl font-bold">Knowledge Graph</h1>
+              </div>
+            </div>
+          </div>
+
+          <Button asChild variant="outline" className="rounded-xl">
+            <Link href={`/workspace/${workspaceId}?tab=overview`}>Return to Workspace</Link>
+          </Button>
+        </div>
+
+        <div className="rounded-[28px] border border-border/60 bg-card/80 p-6 shadow-sm backdrop-blur-sm sm:p-8">
+          <div className="mb-6">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary">
+              <Share2 className="h-3.5 w-3.5" />
+              Concept Map
+            </div>
+            <p className="text-sm text-muted-foreground sm:text-base">
+              Visual map of concepts and their relationships, coloured by mastery level.
+            </p>
           </div>
           <GraphView workspaceId={workspaceId} />
         </div>
       </div>
-    </>
+    </div>
   )
 }

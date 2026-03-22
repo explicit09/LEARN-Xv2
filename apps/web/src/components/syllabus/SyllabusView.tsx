@@ -51,7 +51,7 @@ export function SyllabusView({ workspaceId, hasDocuments }: SyllabusViewProps) {
 
   if (!syllabus) {
     return (
-      <div className="flex flex-col items-center justify-center p-16 text-center rounded-3xl border border-dashed border-border/50 bg-card/20 backdrop-blur-sm m-4">
+      <div className="flex flex-col items-center justify-center p-8 sm:p-16 text-center rounded-3xl border border-dashed border-border/50 bg-card/20 backdrop-blur-sm m-4">
         <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-6 border border-primary/20 shadow-inner">
           <Map className="w-8 h-8 opacity-80" />
         </div>
@@ -78,15 +78,17 @@ export function SyllabusView({ workspaceId, hasDocuments }: SyllabusViewProps) {
           >
             <button
               onClick={() => toggleUnit(unit.id)}
-              className={`flex w-full items-center justify-between px-6 py-5 text-left transition-colors ${isOpen ? 'bg-muted/30' : 'hover:bg-muted/40'}`}
+              className={`flex w-full items-center justify-between px-4 py-4 sm:px-6 sm:py-5 text-left transition-colors ${isOpen ? 'bg-muted/30' : 'hover:bg-muted/40'}`}
             >
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black border border-primary/20 shrink-0">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black border border-primary/20 shrink-0 text-sm sm:text-base">
                   {index + 1}
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-foreground">{unit.title}</h3>
-                  <p className="text-sm text-muted-foreground line-clamp-1 opacity-80 mt-0.5">
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-bold text-foreground truncate">
+                    {unit.title}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1 opacity-80 mt-0.5">
                     {unit.topics.length} {unit.topics.length === 1 ? 'topic' : 'topics'} in this
                     unit
                   </p>
@@ -101,7 +103,7 @@ export function SyllabusView({ workspaceId, hasDocuments }: SyllabusViewProps) {
                 {unit.topics.map((topic, i) => (
                   <div
                     key={topic.id}
-                    className={`px-6 md:px-10 py-5 ${i !== unit.topics.length - 1 ? 'border-b border-border/50' : ''}`}
+                    className={`px-4 sm:px-6 md:px-10 py-4 sm:py-5 ${i !== unit.topics.length - 1 ? 'border-b border-border/50' : ''}`}
                   >
                     <div className="flex items-start gap-4">
                       <div className="mt-1 shrink-0">
@@ -142,7 +144,7 @@ export function SyllabusView({ workspaceId, hasDocuments }: SyllabusViewProps) {
       })}
 
       <section className="overflow-hidden rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-border/50 px-6 py-5 md:flex-row md:items-end md:justify-between">
+        <div className="flex flex-col gap-3 sm:gap-4 border-b border-border/50 px-4 py-4 sm:px-6 sm:py-5 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
             <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
               Concepts
@@ -176,7 +178,7 @@ export function SyllabusView({ workspaceId, hasDocuments }: SyllabusViewProps) {
             </p>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2 px-6 py-5">
+          <div className="flex flex-wrap gap-2 px-4 sm:px-6 py-4 sm:py-5">
             {concepts.map((concept) => (
               <div
                 key={concept.id as string}

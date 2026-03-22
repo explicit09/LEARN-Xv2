@@ -123,7 +123,7 @@ export function ExamRunner({ examId, workspaceId }: ExamRunnerProps) {
   // ── Intro screen ─────────────────────────────────────────
   if (step === 'intro') {
     return (
-      <div className="rounded-2xl border border-border bg-card p-8 text-center max-w-lg mx-auto">
+      <div className="rounded-2xl border border-border bg-card p-5 sm:p-8 text-center max-w-lg mx-auto">
         <h2 className="text-xl font-bold text-foreground">{examInfo.title ?? 'Exam'}</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           {examInfo.questions?.length ?? 0} questions
@@ -148,9 +148,9 @@ export function ExamRunner({ examId, workspaceId }: ExamRunnerProps) {
     const pct = Math.round(result.score * 100)
     return (
       <div className="space-y-6 max-w-2xl mx-auto">
-        <div className="rounded-2xl border border-border bg-card p-8 text-center">
+        <div className="rounded-2xl border border-border bg-card p-5 sm:p-8 text-center">
           <div
-            className={`text-5xl font-black ${pct >= 70 ? 'text-emerald-500' : pct >= 50 ? 'text-amber-500' : 'text-red-500'}`}
+            className={`text-4xl sm:text-5xl font-black ${pct >= 70 ? 'text-emerald-500' : pct >= 50 ? 'text-amber-500' : 'text-red-500'}`}
           >
             {pct}%
           </div>
@@ -245,8 +245,8 @@ export function ExamRunner({ examId, workspaceId }: ExamRunnerProps) {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-6">
-        <p className="text-base font-semibold text-foreground mb-4">{q.question}</p>
+      <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+        <p className="text-sm sm:text-base font-semibold text-foreground mb-4">{q.question}</p>
 
         <div className="space-y-2">
           {q.question_type === 'mcq' && q.options ? (
@@ -258,7 +258,7 @@ export function ExamRunner({ examId, workspaceId }: ExamRunnerProps) {
                 <button
                   key={opt}
                   onClick={() => setUserAnswer(value)}
-                  className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition-all ${
+                  className={`w-full rounded-xl border px-4 py-3 min-h-[44px] text-left text-sm transition-all ${
                     isSelected
                       ? 'border-primary bg-primary/10 text-foreground'
                       : 'border-border hover:bg-muted/50 text-foreground'
@@ -273,7 +273,7 @@ export function ExamRunner({ examId, workspaceId }: ExamRunnerProps) {
               <button
                 key={opt}
                 onClick={() => setUserAnswer(opt.toLowerCase())}
-                className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition-all ${
+                className={`w-full rounded-xl border px-4 py-3 min-h-[44px] text-left text-sm transition-all ${
                   userAnswer === opt.toLowerCase()
                     ? 'border-primary bg-primary/10 text-foreground'
                     : 'border-border hover:bg-muted/50 text-foreground'
@@ -294,19 +294,19 @@ export function ExamRunner({ examId, workspaceId }: ExamRunnerProps) {
         </div>
       </div>
 
-      <div className="flex justify-between">
+      <div className="flex gap-2 justify-between">
         <Button
           variant="outline"
           onClick={handlePrev}
           disabled={currentIndex === 0}
-          className="rounded-xl px-6"
+          className="rounded-xl px-4 sm:px-6 flex-1 sm:flex-none"
         >
           Previous
         </Button>
         <Button
           onClick={handleSaveAndNext}
           disabled={!userAnswer || submitResponse.isPending || completeExam.isPending}
-          className="rounded-xl px-6"
+          className="rounded-xl px-4 sm:px-6 flex-1 sm:flex-none"
         >
           {completeExam.isPending ? (
             'Grading...'

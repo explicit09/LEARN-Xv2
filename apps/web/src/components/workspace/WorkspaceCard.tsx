@@ -72,10 +72,10 @@ export function WorkspaceCard({
         </div>
 
         <div className="relative z-10 flex flex-1 flex-col">
-          <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="mb-2 sm:mb-4 flex items-start justify-between gap-3">
             <div
               className={cn(
-                'flex h-11 w-11 items-center justify-center rounded-xl transition-colors',
+                'flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-xl transition-colors',
                 featured
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground',
@@ -92,7 +92,7 @@ export function WorkspaceCard({
             </Badge>
           </div>
 
-          <div className="mb-4 space-y-2">
+          <div className="mb-2 sm:mb-4 space-y-1 sm:space-y-2">
             <h3
               className={cn(
                 'line-clamp-2 font-bold text-foreground transition-colors',
@@ -102,13 +102,13 @@ export function WorkspaceCard({
               {displayName}
             </h3>
             {(summary || description) && (
-              <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
+              <p className="hidden sm:block line-clamp-2 text-sm leading-6 text-muted-foreground">
                 {summary || description}
               </p>
             )}
           </div>
 
-          <div className="mb-6 mt-auto flex flex-wrap gap-3">
+          <div className="mb-3 sm:mb-6 mt-auto flex flex-wrap gap-2 sm:gap-3">
             {lessonsCount > 0 && (
               <Badge
                 variant="outline"
@@ -136,7 +136,7 @@ export function WorkspaceCard({
           </div>
         </div>
 
-        <div className="relative z-10 border-t border-border pt-4">
+        <div className="relative z-10 border-t border-border pt-2 sm:pt-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1">
               <div className="mb-1.5 flex justify-between text-xs font-medium text-muted-foreground">

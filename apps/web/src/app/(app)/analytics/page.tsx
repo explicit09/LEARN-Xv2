@@ -106,7 +106,9 @@ function StatCard({
 }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
-      <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center mb-3`}>
+      <div
+        className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl ${bg} flex items-center justify-center mb-3`}
+      >
         {icon}
       </div>
       <p className="text-2xl font-bold">{value}</p>

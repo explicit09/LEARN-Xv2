@@ -18,8 +18,8 @@ export function WorkspaceDocuments({ workspaceId }: WorkspaceDocumentsProps) {
   }, [utils, workspaceId])
 
   return (
-    <div className="grid gap-6 p-4 lg:grid-cols-2 lg:p-6">
-      <section className="rounded-[28px] border border-border/60 bg-background/80 p-5 shadow-sm">
+    <div className="grid gap-4 sm:gap-6 p-3 sm:p-4 lg:grid-cols-2 lg:p-6">
+      <section className="rounded-2xl sm:rounded-[28px] border border-border/60 bg-background/80 p-4 sm:p-5 shadow-sm">
         <div className="mb-4 flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <HardDriveDownload className="h-4 w-4" />
@@ -38,7 +38,7 @@ export function WorkspaceDocuments({ workspaceId }: WorkspaceDocumentsProps) {
         <UploadDropzone workspaceId={workspaceId} onUploadComplete={handleUploadComplete} />
       </section>
 
-      <section className="min-w-0 rounded-[28px] border border-border/60 bg-card/50 p-5 shadow-sm lg:p-6">
+      <section className="min-w-0 rounded-2xl sm:rounded-[28px] border border-border/60 bg-card/50 p-4 sm:p-5 shadow-sm lg:p-6">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500">

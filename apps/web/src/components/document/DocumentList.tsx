@@ -55,7 +55,7 @@ export function DocumentList({ workspaceId }: DocumentListProps) {
 
   if (!documents?.length) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center rounded-2xl border border-dashed border-border/50 bg-card/20 backdrop-blur-sm">
+      <div className="flex flex-col items-center justify-center p-6 sm:p-12 text-center rounded-2xl border border-dashed border-border/50 bg-card/20 backdrop-blur-sm">
         <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center text-muted-foreground mb-4">
           <FileText className="w-6 h-6" />
         </div>
@@ -79,10 +79,10 @@ export function DocumentList({ workspaceId }: DocumentListProps) {
         return (
           <div
             key={doc.id as string}
-            className="group flex items-start gap-4 rounded-2xl border border-border/50 bg-card/40 p-4 backdrop-blur-xl transition-all hover:border-primary/20 hover:bg-card/80"
+            className="group flex items-start gap-3 sm:gap-4 rounded-2xl border border-border/50 bg-card/40 p-3 sm:p-4 backdrop-blur-xl transition-all hover:border-primary/20 hover:bg-card/80"
           >
-            <div className="shrink-0 w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-105 transition-transform border border-primary/20 shadow-inner">
-              <Icon className="w-6 h-6" />
+            <div className="shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-105 transition-transform border border-primary/20 shadow-inner">
+              <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
 
             <div className="min-w-0 flex-1 pt-1">

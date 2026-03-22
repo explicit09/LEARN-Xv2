@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createTRPCRouter, protectedProcedure } from '../trpc'
+import { markPlanItemByResource } from './studyPlan'
 import {
   listLessonsSchema,
   getLessonSchema,
@@ -176,6 +177,9 @@ export const lessonRouter = createTRPCRouter({
       latency_ms: 0,
       task_name: 'LESSON_COMPLETED',
     })
+
+    // Heartbeat: mark study plan item as completed
+    await markPlanItemByResource(ctx.supabase, userId, input.id, 'lesson')
 
     return {
       id: data.id as string,

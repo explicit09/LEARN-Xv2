@@ -33,7 +33,7 @@ export function QuizList({ workspaceId }: QuizListProps) {
 
   if (!quizzes?.length) {
     return (
-      <div className="py-12 flex flex-col items-center justify-center text-center rounded-3xl border border-dashed border-border/50 bg-card/20 backdrop-blur-sm">
+      <div className="py-8 sm:py-12 px-4 flex flex-col items-center justify-center text-center rounded-2xl sm:rounded-3xl border border-dashed border-border/50 bg-card/20 backdrop-blur-sm">
         <div className="w-16 h-16 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-500 mb-6 shadow-inner border border-orange-500/20">
           <Flame className="w-8 h-8" />
         </div>
@@ -73,13 +73,13 @@ export function QuizList({ workspaceId }: QuizListProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between glass-card p-4 rounded-2xl border border-border/50">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 border border-orange-500/20">
+      <div className="flex items-center justify-between glass-card p-3 sm:p-4 rounded-2xl border border-border/50 gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 border border-orange-500/20 shrink-0">
             <ActivitySquare className="w-5 h-5" />
           </div>
-          <div>
-            <p className="font-bold text-foreground">Available Quizzes</p>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground text-sm sm:text-base">Available Quizzes</p>
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               {quizzes.length} Total
             </p>
@@ -102,14 +102,14 @@ export function QuizList({ workspaceId }: QuizListProps) {
             key={quiz.id}
             type="button"
             onClick={() => setSelectedQuizId(quiz.id as string)}
-            className="w-full flex items-center justify-between rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm p-4 hover:bg-card/80 hover:border-orange-500/30 transition-all group shadow-sm text-left"
+            className="w-full flex items-center justify-between rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm p-3 sm:p-4 hover:bg-card/80 hover:border-orange-500/30 transition-all group shadow-sm text-left"
           >
             <div className="flex items-start gap-4 flex-1 min-w-0">
               <div className="mt-1 w-10 h-10 shrink-0 rounded-xl bg-muted flex items-center justify-center text-muted-foreground group-hover:text-orange-500 group-hover:bg-orange-500/10 transition-colors border shadow-inner">
                 <Flame className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <p className="font-bold text-foreground text-lg mb-0.5 truncate group-hover:text-orange-500 transition-colors">
+                <p className="font-bold text-foreground text-sm sm:text-lg mb-0.5 truncate group-hover:text-orange-500 transition-colors">
                   {quiz.title ?? 'Untitled Quiz'}
                 </p>
                 <div className="flex items-center gap-2">
@@ -122,7 +122,7 @@ export function QuizList({ workspaceId }: QuizListProps) {
                 </div>
               </div>
             </div>
-            <div className="shrink-0 w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all ml-4 border border-orange-500/20">
+            <div className="shrink-0 w-8 h-8 rounded-lg bg-orange-500/10 hidden sm:flex items-center justify-center text-orange-500 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all ml-4 border border-orange-500/20">
               <ChevronRight className="w-4 h-4" />
             </div>
           </button>

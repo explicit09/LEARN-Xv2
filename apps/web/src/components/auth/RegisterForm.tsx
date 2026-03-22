@@ -33,14 +33,6 @@ export function RegisterForm() {
     setSuccess(true)
   }
 
-  async function handleGoogleSignIn() {
-    const supabase = createClient()
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${window.location.origin}/callback` },
-    })
-  }
-
   if (success) {
     return (
       <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
@@ -96,17 +88,6 @@ export function RegisterForm() {
       </div>
       <Button type="submit" disabled={loading} className="w-full">
         {loading ? 'Creating account…' : 'Create account'}
-      </Button>
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs text-muted-foreground">
-          <span className="bg-background px-2">or</span>
-        </div>
-      </div>
-      <Button type="button" variant="outline" onClick={handleGoogleSignIn} className="w-full">
-        Continue with Google
       </Button>
     </form>
   )

@@ -186,7 +186,7 @@ function LessonSidebarItem({
   lesson: LessonInfo
   index: number
   isActive: boolean
-  meta?: { duration: number; objectives: number }
+  meta?: { duration: number; objectives: number } | undefined
   onSelect: (id: string) => void
 }) {
   return (

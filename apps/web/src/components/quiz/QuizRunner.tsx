@@ -134,7 +134,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
         <Button
           onClick={handleStart}
           disabled={startAttempt.isPending}
-          className="mt-6 rounded-xl px-8"
+          className="mt-6 rounded-xl px-8 w-full md:w-auto"
         >
           {startAttempt.isPending ? 'Starting...' : 'Start Quiz'}
         </Button>
@@ -149,7 +149,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
     const passed = pct >= 70
 
     return (
-      <div className="space-y-6 max-w-2xl mx-auto">
+      <div className="space-y-6 w-full sm:max-w-2xl mx-auto">
         {/* Score header */}
         <div className="rounded-2xl border border-border bg-card p-8 text-center">
           <div className="mb-3">
@@ -169,7 +169,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
           </p>
 
           {/* Stats grid */}
-          <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-border">
+          <div className="grid grid-cols-3 gap-2 md:gap-4 mt-6 pt-6 border-t border-border">
             <div>
               <p className="text-2xl font-bold text-emerald-500">{correctCount}</p>
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -227,8 +227,8 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
           ))}
         </div>
 
-        <div className="flex justify-center">
-          <Button variant="outline" onClick={handleRetake} className="rounded-xl">
+        <div className="flex flex-col md:flex-row md:justify-center gap-2">
+          <Button variant="outline" onClick={handleRetake} className="rounded-xl w-full md:w-auto">
             <RotateCcw className="w-4 h-4 mr-2" />
             Retake
           </Button>
@@ -241,7 +241,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
   if (!q) return null
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
+    <div className="space-y-6 w-full sm:max-w-2xl mx-auto">
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
           Question {currentIndex + 1} of {questions.length}
@@ -267,7 +267,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
                   key={opt}
                   onClick={() => setUserAnswer(letter ?? opt)}
                   disabled={step === 'result'}
-                  className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition-all ${
+                  className={`w-full rounded-xl border px-4 py-3 min-h-[44px] text-left text-sm transition-all ${
                     isSelected
                       ? 'border-primary bg-primary/10 text-foreground'
                       : 'border-border hover:bg-muted/50 text-foreground'
@@ -283,7 +283,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
                 key={opt}
                 onClick={() => setUserAnswer(opt)}
                 disabled={step === 'result'}
-                className={`w-full rounded-xl border px-4 py-3 text-left text-sm transition-all ${
+                className={`w-full rounded-xl border px-4 py-3 min-h-[44px] text-left text-sm transition-all ${
                   userAnswer === opt
                     ? 'border-primary bg-primary/10 text-foreground'
                     : 'border-border hover:bg-muted/50 text-foreground'
@@ -334,12 +334,12 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
         )}
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex flex-col md:flex-row md:justify-end gap-2">
         {step === 'answering' ? (
           <Button
             onClick={handleSubmit}
             disabled={!userAnswer || submitResponse.isPending}
-            className="rounded-xl px-6"
+            className="rounded-xl px-6 w-full md:w-auto"
           >
             Submit
           </Button>
@@ -347,7 +347,7 @@ export function QuizRunner({ quizId, workspaceId }: QuizRunnerProps) {
           <Button
             onClick={handleNext}
             disabled={completeAttempt.isPending}
-            className="rounded-xl px-6"
+            className="rounded-xl px-6 w-full md:w-auto"
           >
             {currentIndex + 1 < questions.length ? (
               <>

@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { computeStreak } from '@/lib/streaks'
 import { createTRPCRouter, protectedProcedure } from '../trpc'
 
 async function resolveUserId(supabase: SupabaseClient, authId: string): Promise<string> {
@@ -107,32 +108,43 @@ export const notificationRouter = createTRPCRouter({
           .filter((c): c is NonNullable<typeof c> => c !== null)
       }
 
-      // Study streak: consecutive days with study_plans
-      const { data: recentPlans } = await ctx.supabase
-        .from('study_plans')
-        .select('date')
-        .eq('user_id', userId)
-        .order('date', { ascending: false })
-        .limit(30)
+      // Study streak: consecutive days with actual learning activity
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const since = thirtyDaysAgo.toISOString()
 
-      let studyStreakDays = 0
-      if (recentPlans?.length) {
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        let checkDate = new Date(today)
+      const [{ data: recentLessons }, { data: recentReviews }] = await Promise.all([
+        ctx.supabase
+          .from('lessons')
+          .select('completed_at')
+          .eq('user_id', userId)
+          .eq('is_completed', true)
+          .gte('completed_at', since),
+        ctx.supabase
+          .from('flashcard_reviews')
+          .select('reviewed_at')
+          .eq('user_id', userId)
+          .gte('reviewed_at', since),
+      ])
 
-        for (const plan of recentPlans) {
-          const planDate = new Date(plan.date as string)
-          planDate.setHours(0, 0, 0, 0)
-
-          if (planDate.getTime() === checkDate.getTime()) {
-            studyStreakDays++
-            checkDate.setDate(checkDate.getDate() - 1)
-          } else {
-            break
-          }
-        }
+      const activeDates = new Set<string>()
+      for (const l of recentLessons ?? []) {
+        const d = (l.completed_at as string)?.split('T')[0]
+        if (d) activeDates.add(d)
       }
+      for (const r of recentReviews ?? []) {
+        const d = (r.reviewed_at as string)?.split('T')[0]
+        if (d) activeDates.add(d)
+      }
+
+      const streakDays = Array.from(activeDates).map((date) => ({
+        date,
+        hasCompletion: true,
+      }))
+      const { currentStreak: studyStreakDays } = computeStreak(streakDays, new Date(), {
+        requireCompletion: true,
+        allowYesterdayStart: true,
+      })
 
       return {
         dueFlashcards: dueFlashcards ?? 0,

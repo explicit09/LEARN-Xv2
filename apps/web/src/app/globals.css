@@ -115,6 +115,9 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: var(--font-body), sans-serif;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
   }
 }
 
@@ -287,4 +290,31 @@
   .ease-spring {
     transition-timing-function: cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
+}
+
+:root {
+  --landing-cream: #f4ede2;
+  --landing-paper: #f8f3eb;
+  --landing-ink: #1d1b19;
+  --landing-muted: rgba(29, 27, 25, 0.72);
+  --landing-muted-strong: rgba(29, 27, 25, 0.84);
+  --landing-accent: #9c4f23;
+  --landing-gold: #d3b27b;
+  --landing-line: rgba(29, 27, 25, 0.12);
+}
+
+@keyframes landing-screen-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.02);
+  }
+  50% {
+    transform: translate3d(0, -12px, 0) scale(1.02);
+  }
+}
+
+.landing-screen {
+  animation: landing-screen-float 9s ease-in-out infinite;
+  transform-origin: center top;
+  will-change: transform;
 }

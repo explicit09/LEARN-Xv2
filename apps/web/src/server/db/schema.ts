@@ -265,6 +265,10 @@ export const syllabusTopics = pgTable('syllabus_topics', {
   title: text('title').notNull(),
   description: text('description'),
   orderIndex: integer('order_index').notNull().default(0),
+  learningObjectives: text('learning_objectives').array().notNull().default([]),
+  continuityNotes: text('continuity_notes'),
+  estimatedDurationMinutes: integer('estimated_duration_minutes').notNull().default(30),
+  prerequisiteTopicIds: uuid('prerequisite_topic_ids').array().notNull().default([]),
   embedding: halfvec('embedding'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -319,12 +323,29 @@ export const lessons = pgTable('lessons', {
   syllabusTopicId: uuid('syllabus_topic_id').references(() => syllabusTopics.id, {
     onDelete: 'set null',
   }),
+  sourceMapping: jsonb('source_mapping').notNull().default([]),
   sourceUpdated: boolean('source_updated').notNull().default(false),
   isCompleted: boolean('is_completed').notNull().default(false),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   timeSpentSeconds: integer('time_spent_seconds').default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const lessonFeedback = pgTable('lesson_feedback', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  lessonId: uuid('lesson_id')
+    .notNull()
+    .references(() => lessons.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  workspaceId: uuid('workspace_id')
+    .notNull()
+    .references(() => workspaces.id, { onDelete: 'cascade' }),
+  rating: integer('rating').notNull(),
+  feedbackText: text('feedback_text'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const lessonConcepts = pgTable(
@@ -363,34 +384,5 @@ export const aiRequests = pgTable('ai_requests', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-// ============================================================
-// Chat sessions + messages
-// ============================================================
-
-export const chatSessions = pgTable('chat_sessions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  workspaceId: uuid('workspace_id')
-    .notNull()
-    .references(() => workspaces.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  lessonId: uuid('lesson_id').references(() => lessons.id, { onDelete: 'set null' }),
-  title: text('title'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
-
-export const chatMessages = pgTable('chat_messages', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  sessionId: uuid('session_id')
-    .notNull()
-    .references(() => chatSessions.id, { onDelete: 'cascade' }),
-  role: text('role', { enum: ['user', 'assistant', 'system'] }).notNull(),
-  content: text('content').notNull(),
-  citedChunkIds: uuid('cited_chunk_ids').array(),
-  modelUsed: text('model_used'),
-  tokenCount: integer('token_count'),
-  latencyMs: integer('latency_ms'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+// Chat tables in ./schema-chat.ts
+export { chatSessions, chatMessages } from './schema-chat'

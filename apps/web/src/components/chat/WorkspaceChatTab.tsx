@@ -66,8 +66,8 @@ export function WorkspaceChatTab({ workspaceId }: WorkspaceChatTabProps) {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Chat history sidebar */}
-      <div className="w-64 shrink-0 border-r border-border bg-card/30 flex flex-col min-h-0">
+      {/* Chat history sidebar — hidden on mobile */}
+      <div className="hidden md:flex md:w-64 md:shrink-0 border-r border-border bg-card/30 flex-col min-h-0">
         <div className="p-3 border-b border-border/50">
           <Button
             onClick={handleNewChat}
@@ -136,6 +136,10 @@ export function WorkspaceChatTab({ workspaceId }: WorkspaceChatTabProps) {
 
       {/* Chat content */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <button className="md:hidden flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground border-b border-border/50 min-h-[44px]">
+          <MessageSquare className="w-4 h-4" />
+          Sessions
+        </button>
         {effectiveSessionId ? (
           <ChatWithMessages
             key={effectiveSessionId}

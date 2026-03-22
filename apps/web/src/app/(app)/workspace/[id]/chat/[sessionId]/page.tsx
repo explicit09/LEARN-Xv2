@@ -64,7 +64,7 @@ export default async function ChatSessionPage({ params }: Props) {
     .order('token_count', { ascending: false })
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden">
+    <div className="flex flex-col h-full bg-background overflow-x-hidden">
       {/* Top Header */}
       <header className="h-16 border-b border-border/50 bg-background/80 backdrop-blur-xl shrink-0 flex items-center justify-between px-6 z-20 sticky top-0">
         <div className="flex items-center gap-4">
@@ -99,7 +99,7 @@ export default async function ChatSessionPage({ params }: Props) {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden min-h-0 relative">
+      <div className="flex flex-1 overflow-x-hidden min-h-0 relative">
         {/* Left Sidebar - Sources */}
         <aside className="w-80 border-r border-border/50 bg-card/30 flex-shrink-0 flex flex-col hidden lg:flex">
           <div className="p-6 pb-2">

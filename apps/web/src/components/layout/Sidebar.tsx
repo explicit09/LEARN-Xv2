@@ -7,11 +7,11 @@ import { useState } from 'react'
 import { cn } from '@learn-x/utils'
 import { createClient } from '@/lib/supabase/client'
 import {
+  BarChart3,
   ChevronLeft,
   ChevronRight,
   LayoutDashboard,
   FolderOpen,
-  Headphones,
   LogOut,
 } from 'lucide-react'
 
@@ -29,10 +29,10 @@ const NAV_ITEMS = [
     shortLabel: 'Spaces',
   },
   {
-    label: 'Podcasts',
-    href: '/podcasts',
-    icon: Headphones,
-    shortLabel: 'Audio',
+    label: 'Analytics',
+    href: '/analytics',
+    icon: BarChart3,
+    shortLabel: 'Stats',
   },
 ]
 
@@ -143,7 +143,7 @@ export function Sidebar() {
       </aside>
 
       <nav
-        className="fixed inset-x-4 bottom-4 z-40 flex items-center justify-between rounded-[24px] border border-white/30 bg-white/80 px-2 py-2 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.24)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-900/85 md:hidden"
+        className="fixed inset-x-2 sm:inset-x-4 bottom-4 z-40 flex items-center justify-between rounded-[24px] border border-white/30 bg-white/80 px-2 py-2 shadow-[0_24px_80px_-40px_rgba(15,23,42,0.24)] backdrop-blur-2xl dark:border-white/10 dark:bg-slate-900/85 md:hidden"
         aria-label="Mobile navigation"
       >
         {NAV_ITEMS.map((item) => {

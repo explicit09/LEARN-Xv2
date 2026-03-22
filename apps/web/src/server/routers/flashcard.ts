@@ -9,6 +9,7 @@ import {
 } from '@learn-x/validators'
 
 import { createTRPCRouter, protectedProcedure } from '../trpc'
+import { markPlanItemByResource } from './studyPlan'
 
 async function resolveUserId(supabase: SupabaseClient, authId: string): Promise<string> {
   const { data: user, error } = await supabase
@@ -209,6 +210,9 @@ export const flashcardRouter = createTRPCRouter({
       latency_ms: 0,
       task_name: 'FLASHCARD_REVIEWED',
     })
+
+    // Heartbeat: mark study plan item as completed
+    await markPlanItemByResource(ctx.supabase, userId, card.set_id, 'flashcard_set')
 
     return {
       ...review,

@@ -50,8 +50,8 @@ export function SpatialStatCard({
     <div
       className={cn(
         tone === 'inverse'
-          ? 'paper-dark-card surface-card-hover group relative overflow-hidden p-5 md:p-6'
-          : 'spatial-surface surface-card-hover group relative overflow-hidden p-5 md:p-6',
+          ? 'paper-dark-card surface-card-hover group relative overflow-hidden p-3 sm:p-5 md:p-6'
+          : 'spatial-surface surface-card-hover group relative overflow-hidden p-3 sm:p-5 md:p-6',
         className,
       )}
     >
@@ -76,7 +76,7 @@ export function SpatialStatCard({
           </p>
           <span
             className={cn(
-              'block text-3xl font-semibold tracking-tight md:text-4xl',
+              'block text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl',
               tone === 'inverse' ? 'text-white' : 'text-foreground',
             )}
           >
@@ -96,7 +96,7 @@ export function SpatialStatCard({
 
         <div
           className={cn(
-            'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border',
+            'flex h-9 w-9 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-xl sm:rounded-2xl border',
             colorStyles[color],
           )}
         >

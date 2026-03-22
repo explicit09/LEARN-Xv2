@@ -138,7 +138,7 @@ export function UploadDropzone({ workspaceId, onUploadComplete }: UploadDropzone
         onDrop={handleDrop}
         disabled={uploading}
         className={[
-          'flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-10 transition-colors',
+          'flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-6 sm:px-6 sm:py-10 transition-colors min-h-[44px]',
           isDragging
             ? 'border-foreground bg-muted'
             : 'border-border hover:border-muted-foreground hover:bg-muted/50',

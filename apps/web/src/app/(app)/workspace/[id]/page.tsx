@@ -46,13 +46,15 @@ function OverviewSection({
   children: ReactNode
 }) {
   return (
-    <section className="overflow-hidden rounded-[32px] border border-border/60 bg-card/70 shadow-sm">
-      <div className="flex flex-col gap-4 border-b border-border/60 px-5 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
+    <section className="overflow-hidden rounded-2xl sm:rounded-[32px] border border-border/60 bg-card/70 shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-border/60 px-4 py-4 sm:px-6 sm:py-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-2xl">
           <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
             {eyebrow}
           </p>
-          <h3 className="mt-2 text-2xl font-bold tracking-tight text-foreground">{title}</h3>
+          <h3 className="mt-2 text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            {title}
+          </h3>
           <p className="mt-2 text-sm leading-7 text-muted-foreground">{body}</p>
         </div>
         {actionHref && actionLabel ? (
@@ -82,7 +84,6 @@ const TABS = [
   { key: 'flashcards', label: 'Flashcards', icon: Brain },
   { key: 'quiz', label: 'Quiz', icon: ClipboardCheck },
   { key: 'exams', label: 'Exams', icon: GraduationCap },
-  { key: 'audio', label: 'Podcasts', icon: Headphones },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key'] | 'exam' | 'graph'
@@ -105,7 +106,6 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
   // Exams now render inline
   if (activeTab === 'graph') redirect(`/workspace/${id}/graph`)
   // Quiz now renders inline
-  if (activeTab === 'audio') redirect('/podcasts')
 
   const documents = await caller.document.list({ workspaceId: id }).catch(() => [])
   const [concepts, lessons, masterySummary] = await Promise.all([
@@ -128,7 +128,7 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
     'Structured learning materials and generated study paths.'
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-background flex flex-col">
+    <div className="fixed inset-0 overflow-x-hidden overflow-y-auto bg-background flex flex-col">
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-pink-50/30 dark:from-blue-950/20 dark:via-purple-950/20 dark:to-pink-950/20" />
 
       <div className="relative z-10 border-b border-gray-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-gray-900/80">
@@ -164,9 +164,9 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
       </div>
 
       <div className="relative z-10 mx-auto flex flex-1 min-h-0 w-full max-w-[1600px] flex-col">
-        <div className="flex h-full flex-col overflow-hidden border-x border-b border-gray-200 bg-white/90 backdrop-blur-xl dark:border-white/10 dark:bg-gray-900/90">
+        <div className="flex h-full flex-col overflow-x-hidden sm:border-x border-b border-gray-200 bg-white/90 backdrop-blur-xl dark:border-white/10 dark:bg-gray-900/90">
           <div className="shrink-0 border-b border-gray-200 bg-white/50 px-2 dark:border-white/10 dark:bg-gray-900/50 sm:px-4">
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-1.5">
+            <div className="relative flex items-center gap-1 overflow-x-auto no-scrollbar py-1.5">
               {TABS.map((tabItem) => {
                 const Icon = tabItem.icon
                 const isActive = activeTab === tabItem.key
@@ -176,35 +176,38 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
                     key={tabItem.key}
                     href={`/workspace/${id}?tab=${tabItem.key}`}
                     className={cn(
-                      'relative flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-all',
+                      'relative flex items-center gap-1.5 sm:gap-2 whitespace-nowrap rounded-lg px-3 sm:px-4 py-2 text-sm font-medium transition-all min-h-[44px]',
                       isActive
                         ? 'text-primary'
                         : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
                     )}
                   >
                     <Icon className={cn('h-4 w-4', isActive && 'text-primary')} />
-                    <span>{tabItem.label}</span>
+                    <span className={cn('hidden md:inline', isActive && 'inline')}>
+                      {tabItem.label}
+                    </span>
                     {isActive && (
                       <span className="absolute inset-0 -z-10 rounded-lg border border-primary/20 bg-primary/10" />
                     )}
                   </Link>
                 )
               })}
+              <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent pointer-events-none md:hidden" />
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
             {/* Global listener for lesson completion toasts */}
             <WorkspaceCompletionListener workspaceId={id} />
 
             {activeTab === 'overview' && (
-              <div className="space-y-8 p-4 sm:p-6">
+              <div className="space-y-5 sm:space-y-8 p-3 sm:p-6">
                 {/* Pipeline activity feed — shows while building */}
                 {hasDocuments && <PipelineActivityFeed workspaceId={id} />}
 
                 {/* Getting started — empty workspace */}
                 {!hasDocuments && (
-                  <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-primary/30 bg-primary/[0.03] p-12 text-center">
+                  <div className="flex flex-col items-center justify-center rounded-2xl sm:rounded-3xl border border-dashed border-primary/30 bg-primary/[0.03] p-4 sm:p-8 md:p-12 text-center">
                     <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner border border-primary/20">
                       <BookOpen className="h-8 w-8" />
                     </div>
@@ -226,7 +229,7 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
                 {/* Stats — only show when workspace has content */}
                 {hasDocuments && (
                   <>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-2 xl:grid-cols-4">
                       <SpatialStatCard
                         label="Documents"
                         value={documentCount}
@@ -289,7 +292,7 @@ export default async function WorkspacePage({ params, searchParams }: WorkspaceP
             {activeTab === 'chat' && <WorkspaceChatTab workspaceId={id} />}
 
             {activeTab === 'flashcards' && (
-              <div className="flex-1 overflow-auto p-4 md:p-8 flex flex-col gap-6 max-w-[1400px] mx-auto w-full">
+              <div className="flex-1 overflow-auto p-3 sm:p-4 md:p-8 flex flex-col gap-6 max-w-[1400px] mx-auto w-full">
                 <FlashcardSetList workspaceId={id} />
               </div>
             )}

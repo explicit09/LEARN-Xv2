@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
       <SkipLink />
-      <div className="relative min-h-screen overflow-hidden bg-background text-foreground transition-colors duration-300">
+      <div className="relative min-h-screen overflow-x-hidden bg-background text-foreground transition-colors duration-300">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute top-[-10%] left-[-10%] h-[50%] w-[50%] rounded-full bg-blue-600/5 blur-[120px] mix-blend-screen" />
           <div className="absolute right-[-10%] top-[20%] h-[40%] w-[40%] rounded-full bg-purple-600/5 blur-[120px] mix-blend-screen" />
